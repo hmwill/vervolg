@@ -1,5 +1,279 @@
+use super::ast;
+
 grammar;
 
-pub statement: () = {
-    "Hello" "World",
+pub SqlStatement: ast::SqlStatement = {
+    <statement: Statement> => ast::SqlStatement::Statement(statement),
+    "EXPLAIN" ("QUERY" "PLAN")? <statement: Statement> => ast::SqlStatement::ExplainQueryPlan(statement),
+};
+
+Statement: ast::Statement = {
+    SelectStatement,
+};
+
+SelectStatement: ast::Statement = {
+    TableExpressions? SelectCoreList OrderByClause? LimitClause? => ast::Statement::SelectStatement,
+};
+
+TableExpressions: () = {
+    "WITH" "RECURSIVE"? CommonTableExpressionList,
+};
+
+CommonTableExpressionList: () = {
+    CommonTableExpression,
+    CommonTableExpressionList "," CommonTableExpression,
+};
+
+CommonTableExpression: () = {
+    Identifier "AS" "(" SelectStatement ")",
+    Identifier "(" IdentifierList ")" "AS" "(" SelectStatement ")",
+};
+
+SelectCoreList: () = {
+    SelectCore,
+    SelectCoreList CompoundOperator SelectCore,
+};
+
+CompoundOperator: () = {
+    "UNION",
+    "UNION" "ALL",
+    "INTERSECT",
+    "EXCEPT",
+};
+
+SelectCore: () = {
+    "SELECT" SelectMode? ResultColumnList FromClause? WhereClause? GroupByClause?,
+    "VALUES" TupleList,
+};
+
+SelectMode: () = {
+    "ALL",
+    "DISTINCT",
+};
+
+TupleList: () = {
+    Tuple,
+    TupleList "," Tuple,
+};
+
+Tuple: () = {
+    "(" ExpressionList ")",
+};
+
+ExpressionList: () = {
+    Expression,
+    ExpressionList "," Expression,
+};
+
+ResultColumnList: () = {
+    ResultColumn,
+    ResultColumnList "," ResultColumn,
+};
+
+ResultColumn: () = {
+    Expression ("AS"? Identifier)?,
+    "*",
+    Identifier "." "*",
+};
+
+QualifiedIdentifier: () = {
+    Identifier,
+    Identifier "." Identifier,
+    Identifier "." Identifier "." Identifier,
+};
+
+FromClause: () = {
+    "FROM" JoinClause,
+};
+
+JoinClause: () = {
+    TableOrSubQuery,
+    JoinClause "," TableOrSubQuery,
+    JoinClause JoinOperator TableOrSubQuery JoinConstraint,
+
+};
+
+TableOrSubQueryList: () = {
+    TableOrSubQuery,
+    TableOrSubQueryList "," TableOrSubQuery,
+};
+
+TableOrSubQuery: () = {
+    QualifiedIdentifier TableAlias? IndexClause?,
+    "(" SelectStatement ")" TableAlias?,
+    "(" JoinClause ")",
+};
+
+TableAlias: () = {
+    "AS"? Identifier,
+};
+
+IndexClause: () = {
+    "INDEXED" "BY" Identifier,
+    "NOT" "INDEXED",
+};
+
+JoinOperator: () = {
+    "NATURAL"? JoinType? "JOIN",
+};
+
+JoinType: () = {
+    "LEFT" "OUTER"?,
+    "INNER",
+    "CROSS",
+};
+
+JoinConstraint: () = {
+    "ON" Expression,
+    "USING" "(" IdentifierList ")",
+};
+
+IdentifierList: () = {
+    Identifier,
+    IdentifierList "," Identifier,
+};
+
+WhereClause: () = {
+    "WHERE" Expression,
+};
+
+GroupByClause: () = {
+    "GROUP" "BY" ExpressionList,
+    "GROUP" "BY" ExpressionList "HAVING" Expression,
+};
+
+OrderByClause: () = {
+    "ORDER" "BY" OrderingTermList,
+};
+
+OrderingTermList: () = {
+    OrderingTerm,
+    OrderingTermList "," OrderingTerm,
+};
+
+OrderingTerm: () = {
+    Expression OrderingCollation? OrderingDirection?,
+};
+
+OrderingCollation: () = {
+    "COLLATE" Identifier,
+};
+
+OrderingDirection: () = {
+    "ASC",
+    "DESC",
+};
+
+LimitClause: () = {
+    "LIMIT" Expression,
+    "LIMIT" Expression "," Expression,
+    "LIMIT" Expression "OFFSET" Expression,
+};
+
+PrimaryExpression: () = {
+    "(" ExpressionList ")",
+    "(" SelectStatement ")",
+    LiteralValue,
+    QualifiedIdentifier,
+};
+
+UnaryExpression: () = {
+    PrimaryExpression,
+    UnaryOperator UnaryExpression,
+};
+
+UnaryOperator: () = {
+    "+",
+    "-",
+};
+
+MultiplicativeExpression: () = {
+    UnaryExpression,
+    MultiplicativeExpression "*" UnaryExpression,
+    MultiplicativeExpression "/" UnaryExpression,
+};
+
+AdditiveExpression: () = {
+    MultiplicativeExpression,
+    AdditiveExpression "+" MultiplicativeExpression,
+    AdditiveExpression "-" MultiplicativeExpression,
+    AdditiveExpression "||" MultiplicativeExpression,
+};
+
+ComparativeExpression: () = {
+    AdditiveExpression,
+    ComparativeExpression "=" AdditiveExpression,
+    ComparativeExpression "!=" AdditiveExpression,
+    ComparativeExpression "<" AdditiveExpression,
+    ComparativeExpression ">" AdditiveExpression,
+    ComparativeExpression "<=" AdditiveExpression,
+    ComparativeExpression ">=" AdditiveExpression,
+    ComparativeExpression "ISNULL",
+    ComparativeExpression "NOTNULL",
+    ComparativeExpression "NOT" "NULL",
+    ComparativeExpression "IS" "NOT"? AdditiveExpression,
+    ComparativeExpression "LIKE" AdditiveExpression,
+    ComparativeExpression "NOT"? "IN" "(" ExpressionList? ")",
+    ComparativeExpression "NOT"? "IN" "(" SelectStatement ")",
+    ComparativeExpression "NOT"? "IN" QualifiedIdentifier,
+};
+
+ComplexExpression: () = {
+    ComparativeExpression,
+//    ComplexExpression "NOT"? "BETWEEN" ComparativeExpression "AND" ComparativeExpression,
+    CaseExpression,
+};
+
+CaseExpression: () = {
+    "CASE" Expression? WhenClause+ ElseClause? "END",
+};
+
+WhenClause: () = {
+    "WHEN" Expression "THEN" Expression,
+};
+
+ElseClause: () = {
+    "ELSE" Expression,
+};
+
+NotExpression: () = {
+    ComplexExpression,
+    "NOT" ComplexExpression,
+};
+
+AndExpression: () = {
+    NotExpression,
+    AndExpression "AND" NotExpression,
+};
+
+OrExpression: () = {
+    AndExpression,
+    OrExpression "OR" AndExpression,  
+};
+
+Expression: () = {
+    OrExpression,
+};
+
+LiteralValue: () = {
+    NumericLiteral,
+    StringLiteral,
+    "NULL",
+    "CURRENT_TIME",
+    "CURRENT_DATE",
+    "CURRENT_TIMESTAMP",
+};
+
+Identifier: () = {
+    r"[A-Za-z_][A-Za-z0-9_]*",
+};
+
+NumericLiteral: () = {
+    r"[0-9]+(\.[0-9]*)?(E[+-]?[0-9]+)?",
+    r"\.[0-9]+(E[+-]?[0-9]+)?",
+    r"0x[0-9A-Fa-f]+",
+};
+
+StringLiteral: () = {
+    r"'[^[[:cntrl:]]']*'",
 };

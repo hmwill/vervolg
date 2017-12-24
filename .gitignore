@@ -12,3 +12,5 @@ Cargo.lock
 **/*.rs.bk
 Cargo.lock
 src/sql.rs
+src/sql.report
+src/sql.summary
