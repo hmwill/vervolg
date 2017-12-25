@@ -42,17 +42,17 @@ pub enum ComparisonOperator {
 pub enum Expression {
     Literal(Literal),
     QualifiedIdentifier(Vec<String>),
-    TupleExpression(Vec<Box<Expression>>),
-    SelectStatement(SelectStatement),
+    MakeTuple(Vec<Box<Expression>>),
+    Select(SelectStatement),
 
-    UnaryExpression(UnaryOperator, Box<Expression>),
-    BinaryExpression(BinaryOperator, Box<Expression>, Box<Expression>),
-    CompareExpression(ComparisonOperator, Box<Expression>, Box<Expression>),
+    Unary { op: UnaryOperator, expr: Box<Expression> },
+    Binary { op: BinaryOperator, left: Box<Expression>, right: Box<Expression> },
+    Comparison { op: ComparisonOperator, left: Box<Expression>, right: Box<Expression> },
 
-    InExpression(Box<Expression>, SetSpecification),
-    BetweenExpression(Box<Expression>, Box<Expression>, Box<Expression>),
+    In { expr: Box<Expression>, set: SetSpecification },
+    Between { expr: Box<Expression>, lower: Box<Expression>, upper: Box<Expression> },
 
-    CaseExpression(Box<Expression>, Vec<WhenClause>, Option<Box<Expression>>),
+    Case { expr: Box<Expression>, when_part: Vec<WhenClause>, else_part: Option<Box<Expression>> },
 }
 
 pub enum SetSpecification {
