@@ -8,11 +8,11 @@ pub SqlStatement: ast::SqlStatement = {
 };
 
 Statement: ast::Statement = {
-    SelectStatement,
+    SelectStatement => ast::Statement::SelectStatement(<>),
 };
 
-SelectStatement: ast::Statement = {
-    TableExpressions? SelectCoreList OrderByClause? LimitClause? => ast::Statement::SelectStatement,
+SelectStatement: ast::SelectStatement = {
+    TableExpressions? SelectCoreList OrderByClause? LimitClause? => ast::SelectStatement{},
 };
 
 TableExpressions: () = {
@@ -60,11 +60,6 @@ Tuple: () = {
     "(" ExpressionList ")",
 };
 
-ExpressionList: () = {
-    Expression,
-    ExpressionList "," Expression,
-};
-
 ResultColumnList: () = {
     ResultColumn,
     ResultColumnList "," ResultColumn,
@@ -76,10 +71,10 @@ ResultColumn: () = {
     Identifier "." "*",
 };
 
-QualifiedIdentifier: () = {
-    Identifier,
-    Identifier "." Identifier,
-    Identifier "." Identifier "." Identifier,
+QualifiedIdentifier: Vec<String> = {
+    Identifier => vec![<>],
+    <i1:Identifier> "." <i2:Identifier> => vec![i1, i2],
+    <i1:Identifier> "." <i2:Identifier> "." <i3:Identifier> => vec![i1, i2, i3],
 };
 
 FromClause: () = {
@@ -170,110 +165,167 @@ LimitClause: () = {
     "LIMIT" Expression "OFFSET" Expression,
 };
 
-PrimaryExpression: () = {
-    "(" ExpressionList ")",
-    "(" SelectStatement ")",
-    LiteralValue,
-    QualifiedIdentifier,
+ExpressionList: Vec<Box<ast::Expression>> = {
+    Expression => vec![<>],
+    <exprs:ExpressionList> "," <expr:Expression> => {
+        let mut result = exprs;
+        result.push(expr);
+        result
+    },
 };
 
-UnaryExpression: () = {
+PrimaryExpression: Box<ast::Expression> = {
+    "(" <exprs:ExpressionList> ")" => {
+        if exprs.len() == 1 {
+            let mut copy = exprs;
+            copy.remove(0)
+        } else {
+            Box::new(ast::Expression::TupleExpression(exprs))
+        }
+    },
+    "(" <select:SelectStatement> ")" => Box::new(ast::Expression::SelectStatement(select)),
+    LiteralValue => Box::new(ast::Expression::Literal(<>)),
+    QualifiedIdentifier => Box::new(ast::Expression::QualifiedIdentifier(<>)),
+};
+
+UnaryExpression: Box<ast::Expression> = {
     PrimaryExpression,
-    UnaryOperator UnaryExpression,
+    "+" <expr:UnaryExpression> => expr,
+    "-" <expr:UnaryExpression> => Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Negate, expr)),
 };
 
-UnaryOperator: () = {
-    "+",
-    "-",
-};
-
-MultiplicativeExpression: () = {
+MultiplicativeExpression: Box<ast::Expression> = {
     UnaryExpression,
-    MultiplicativeExpression "*" UnaryExpression,
-    MultiplicativeExpression "/" UnaryExpression,
+    <left:MultiplicativeExpression> "*" <right:UnaryExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Multiply, left, right)),
+    <left:MultiplicativeExpression> "/" <right:UnaryExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Divide, left, right)),
 };
 
-AdditiveExpression: () = {
+AdditiveExpression: Box<ast::Expression> = {
     MultiplicativeExpression,
-    AdditiveExpression "+" MultiplicativeExpression,
-    AdditiveExpression "-" MultiplicativeExpression,
-    AdditiveExpression "||" MultiplicativeExpression,
+    <left:AdditiveExpression> "+" <right:MultiplicativeExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Add, left, right)),
+    <left:AdditiveExpression> "-" <right:MultiplicativeExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Subtract, left, right)),
+    <left:AdditiveExpression> "||" <right:MultiplicativeExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Concat, left, right)),
 };
 
-ComparativeExpression: () = {
+ComparativeExpression: Box<ast::Expression> = {
     AdditiveExpression,
-    ComparativeExpression "=" AdditiveExpression,
-    ComparativeExpression "!=" AdditiveExpression,
-    ComparativeExpression "<" AdditiveExpression,
-    ComparativeExpression ">" AdditiveExpression,
-    ComparativeExpression "<=" AdditiveExpression,
-    ComparativeExpression ">=" AdditiveExpression,
-    ComparativeExpression "ISNULL",
-    ComparativeExpression "NOTNULL",
-    ComparativeExpression "NOT" "NULL",
-    ComparativeExpression "IS" "NOT"? AdditiveExpression,
-    ComparativeExpression "LIKE" AdditiveExpression,
-    ComparativeExpression "NOT"? "IN" "(" ExpressionList? ")",
-    ComparativeExpression "NOT"? "IN" "(" SelectStatement ")",
-    ComparativeExpression "NOT"? "IN" QualifiedIdentifier,
+    <left:ComparativeExpression> "=" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::Equal, left, right)),
+    <left:ComparativeExpression> "!=" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::NotEqual, left, right)),
+    <left:ComparativeExpression> "<" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::LessThan, left, right)),
+    <left:ComparativeExpression> ">" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::GreaterThan, left, right)),
+    <left:ComparativeExpression> "<=" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::LessEqual, left, right)),
+    <left:ComparativeExpression> ">=" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::GreaterEqual, left, right)),
+    <left:ComparativeExpression> "IS" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::Is, left, right)),
+    <left:ComparativeExpression> "IS" "NOT" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::IsNot, left, right)),
+    <left:ComparativeExpression> "LIKE" <right:AdditiveExpression> =>
+        Box::new(ast::Expression::CompareExpression(ast::ComparisonOperator::Like, left, right)),
+
+    <expr:ComparativeExpression> "ISNULL" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::IsNull, expr)),
+    <expr:ComparativeExpression> "NOTNULL" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,
+                 Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::IsNull, expr)))),
+    <expr:ComparativeExpression> "NOT" "NULL" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,
+                 Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::IsNull, expr)))),
+
+    <expr:ComparativeExpression> "IN" "("  ")" =>
+        Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::List(Vec::new()))),
+    <expr:ComparativeExpression> "NOT" "IN" "("  ")" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,        
+            Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::List(Vec::new()))))),
+    <expr:ComparativeExpression> "IN" "(" <exprs:ExpressionList> ")" =>
+        Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::List(exprs))),
+    <expr:ComparativeExpression> "NOT" "IN" "(" <exprs:ExpressionList> ")" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,        
+            Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::List(exprs))))),
+
+    <expr:ComparativeExpression> "IN" "(" <select:SelectStatement> ")" =>
+        Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::Select(select))),
+    <expr:ComparativeExpression> "NOT" "IN" "(" <select:SelectStatement> ")" =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,        
+            Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::Select(select))))),
+
+    <expr:ComparativeExpression> "IN" <name:QualifiedIdentifier> =>
+        Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::Name(name))),
+    <expr:ComparativeExpression> "NOT" "IN" <name:QualifiedIdentifier> =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,        
+            Box::new(ast::Expression::InExpression(expr, ast::SetSpecification::Name(name))))),
+
+    <expr:ComparativeExpression> "BETWEEN" <lower:AdditiveExpression> "AND" <upper:AdditiveExpression> =>
+        Box::new(ast::Expression::BetweenExpression(expr, lower, upper)),
+    <expr:ComparativeExpression> "NOT" "BETWEEN" <lower:AdditiveExpression> "AND" <upper:AdditiveExpression> =>
+        Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not,
+            Box::new(ast::Expression::BetweenExpression(expr, lower, upper)))),
 };
 
-ComplexExpression: () = {
+ComplexExpression: Box<ast::Expression> = {
     ComparativeExpression,
-//    ComplexExpression "NOT"? "BETWEEN" ComparativeExpression "AND" ComparativeExpression,
     CaseExpression,
 };
 
-CaseExpression: () = {
-    "CASE" Expression? WhenClause+ ElseClause? "END",
+CaseExpression: Box<ast::Expression> = {
+    "CASE" <expr:Expression> <when_part:WhenClause+> <else_part:ElseClause?> "END" =>
+        Box::new(ast::Expression::CaseExpression(expr, when_part, else_part)),
 };
 
-WhenClause: () = {
-    "WHEN" Expression "THEN" Expression,
+WhenClause: ast::WhenClause = {
+    "WHEN" <when:Expression> "THEN" <then:Expression> => ast::WhenClause { guard: when, body:then},
 };
 
-ElseClause: () = {
-    "ELSE" Expression,
+ElseClause: Box<ast::Expression> = {
+    "ELSE" <expr:Expression> => expr,
 };
 
-NotExpression: () = {
+NotExpression: Box<ast::Expression> = {
     ComplexExpression,
-    "NOT" ComplexExpression,
+    "NOT" <expr:ComplexExpression> => Box::new(ast::Expression::UnaryExpression(ast::UnaryOperator::Not, expr)),
 };
 
-AndExpression: () = {
+AndExpression: Box<ast::Expression> = {
     NotExpression,
-    AndExpression "AND" NotExpression,
+    <left:AndExpression> "AND" <right:NotExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::And, left, right)),
 };
 
-OrExpression: () = {
+OrExpression: Box<ast::Expression> = {
     AndExpression,
-    OrExpression "OR" AndExpression,  
+    <left:OrExpression> "OR" <right:AndExpression> =>
+        Box::new(ast::Expression::BinaryExpression(ast::BinaryOperator::Or, left, right)),
 };
 
-Expression: () = {
+Expression: Box<ast::Expression> = {
     OrExpression,
 };
 
-LiteralValue: () = {
-    NumericLiteral,
-    StringLiteral,
-    "NULL",
-    "CURRENT_TIME",
-    "CURRENT_DATE",
-    "CURRENT_TIMESTAMP",
+LiteralValue: ast::Literal = {
+    NumericLiteral => ast::Literal::NumericLiteral(<>),
+    StringLiteral => ast::Literal::StringLiteral(<>),
+    "NULL" => ast::Literal::Null,
+    "CURRENT_TIME" => ast::Literal::CurrentTime,
+    "CURRENT_DATE" => ast::Literal::CurrentDate,
+    "CURRENT_TIMESTAMP" => ast::Literal::CurrentTimestamp,
 };
 
-Identifier: () = {
-    r"[A-Za-z_][A-Za-z0-9_]*",
+Identifier: String = r"[A-Za-z_][A-Za-z0-9_]*" => <>.to_string();
+
+NumericLiteral: String = {
+    r"[0-9]+(\.[0-9]*)?(E[+-]?[0-9]+)?" => <>.to_string(),
+    r"\.[0-9]+(E[+-]?[0-9]+)?" => <>.to_string(),
+    r"0x[0-9A-Fa-f]+" => <>.to_string(),
 };
 
-NumericLiteral: () = {
-    r"[0-9]+(\.[0-9]*)?(E[+-]?[0-9]+)?",
-    r"\.[0-9]+(E[+-]?[0-9]+)?",
-    r"0x[0-9A-Fa-f]+",
-};
-
-StringLiteral: () = {
-    r"'[^[[:cntrl:]]']*'",
-};
+StringLiteral: String = r"'[^[[:cntrl:]]']*'" => <>[1..<>.len() - 1].to_string();
