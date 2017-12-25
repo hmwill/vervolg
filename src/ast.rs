@@ -8,7 +8,26 @@ pub enum Statement {
 }
 
 pub struct SelectStatement {
+    pub order_by: Vec<Ordering>,
+    pub limit: Option<Limit>,
+}
 
+pub enum SelectMode {
+    All,
+    Distinct
+}
+
+pub enum SetExpression {
+    Values(Vec<Vec<Box<Expression>>>),
+    Query { mode: SelectMode, where_expr: Option<Box<Expression>> },
+    Op { op: SetOperator, left: Box<SetExpression>, right: Box<SetExpression> },
+}
+
+pub enum SetOperator {
+    Intersect,
+    Except,
+    Union,
+    UnionAll,
 }
 
 pub enum UnaryOperator {
@@ -75,3 +94,24 @@ pub enum Literal {
     CurrentTimestamp,
 }
 
+pub enum OrderingDirection {
+    Ascending,
+    Descending,
+}
+
+pub struct Ordering {
+    pub expr: Box<Expression>,
+    pub collation: Option<String>,
+    pub direction: OrderingDirection,
+}
+
+pub struct Limit {
+    pub number_rows: Box<Expression>,
+    pub offset_value: Option<Box<Expression>>,
+}
+
+pub fn append<T>(list: Vec<T>, item: T) -> Vec<T> {
+    let mut result = list;
+    result.push(item);
+    result
+}

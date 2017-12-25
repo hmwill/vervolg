@@ -12,7 +12,11 @@ Statement: ast::Statement = {
 };
 
 SelectStatement: ast::SelectStatement = {
-    TableExpressions? SelectCoreList OrderByClause? LimitClause? => ast::SelectStatement{},
+    TableExpressions? SelectCoreList <ordering:OrderByClause?> <limit:LimitClause?> => 
+        ast::SelectStatement {
+            order_by: ordering.unwrap_or(Vec::new()),
+            limit
+        },
 };
 
 TableExpressions: () = {
@@ -29,35 +33,37 @@ CommonTableExpression: () = {
     Identifier "(" IdentifierList ")" "AS" "(" SelectStatement ")",
 };
 
-SelectCoreList: () = {
+SelectCoreList: Box<ast::SetExpression> = {
     SelectCore,
-    SelectCoreList CompoundOperator SelectCore,
+    <left:SelectCoreList> <op:CompoundOperator> <right:SelectCore> =>
+        Box::new(ast::SetExpression::Op { op, left, right }),
 };
 
-CompoundOperator: () = {
-    "UNION",
-    "UNION" "ALL",
-    "INTERSECT",
-    "EXCEPT",
+CompoundOperator: ast::SetOperator = {
+    "UNION" => ast::SetOperator::Union,
+    "UNION" "ALL" => ast::SetOperator::UnionAll,
+    "INTERSECT" => ast::SetOperator::Intersect,
+    "EXCEPT" => ast::SetOperator::Except,
 };
 
-SelectCore: () = {
-    "SELECT" SelectMode? ResultColumnList FromClause? WhereClause? GroupByClause?,
-    "VALUES" TupleList,
+SelectCore: Box<ast::SetExpression> = {
+    "SELECT" <mode:SelectMode> ResultColumnList FromClause? <where_expr:WhereClause?> GroupByClause? =>
+        Box::new(ast::SetExpression::Query{ mode, where_expr }),
+    "VALUES" <tuples:TupleList> => Box::new(ast::SetExpression::Values(tuples)),
 };
 
-SelectMode: () = {
-    "ALL",
-    "DISTINCT",
+SelectMode: ast::SelectMode = {
+    "ALL"? => ast::SelectMode::All,
+    "DISTINCT" => ast::SelectMode::Distinct,
 };
 
-TupleList: () = {
-    Tuple,
-    TupleList "," Tuple,
+TupleList: Vec<Vec<Box<ast::Expression>>> = {
+    Tuple => vec![<>],
+    <tuples:TupleList> "," <tuple:Tuple> => ast::append(tuples, tuple),
 };
 
-Tuple: () = {
-    "(" ExpressionList ")",
+Tuple: Vec<Box<ast::Expression>> = {
+    "(" <exprs:ExpressionList> ")" => exprs,
 };
 
 ResultColumnList: () = {
@@ -123,13 +129,13 @@ JoinConstraint: () = {
     "USING" "(" IdentifierList ")",
 };
 
-IdentifierList: () = {
-    Identifier,
-    IdentifierList "," Identifier,
+IdentifierList: Vec<String> = {
+    Identifier => vec![<>],
+    <ids:IdentifierList> "," <id:Identifier> => ast::append(ids, id),
 };
 
-WhereClause: () = {
-    "WHERE" Expression,
+WhereClause: Box<ast::Expression> = {
+    "WHERE" <expr:Expression> => expr,
 };
 
 GroupByClause: () = {
@@ -137,41 +143,40 @@ GroupByClause: () = {
     "GROUP" "BY" ExpressionList "HAVING" Expression,
 };
 
-OrderByClause: () = {
-    "ORDER" "BY" OrderingTermList,
+OrderByClause: Vec<ast::Ordering> = {
+    "ORDER" "BY" <ordering:OrderingTermList> => ordering,
 };
 
-OrderingTermList: () = {
-    OrderingTerm,
-    OrderingTermList "," OrderingTerm,
+OrderingTermList: Vec<ast::Ordering> = {
+    OrderingTerm => vec![<>],
+    <terms:OrderingTermList> "," <term:OrderingTerm> => ast::append(terms, term),
 };
 
-OrderingTerm: () = {
-    Expression OrderingCollation? OrderingDirection?,
+OrderingTerm: ast::Ordering = {
+    <expr:Expression> <collation:OrderingCollation?> <direction:OrderingDirection> => 
+        ast::Ordering { expr, collation, direction },
 };
 
-OrderingCollation: () = {
-    "COLLATE" Identifier,
+OrderingCollation: String = {
+    "COLLATE" <name:Identifier> => name,
 };
 
-OrderingDirection: () = {
-    "ASC",
-    "DESC",
+OrderingDirection: ast::OrderingDirection = {
+    "ASC"? => ast::OrderingDirection::Ascending,
+    "DESC" => ast::OrderingDirection::Descending,
 };
 
-LimitClause: () = {
-    "LIMIT" Expression,
-    "LIMIT" Expression "," Expression,
-    "LIMIT" Expression "OFFSET" Expression,
+LimitClause: ast::Limit = {
+    "LIMIT" <number_rows:Expression> => ast::Limit { number_rows, offset_value: None },
+    "LIMIT" <number_rows:Expression> "," <offset:Expression> =>
+        ast::Limit { number_rows, offset_value: Some(offset) },
+    "LIMIT" <number_rows:Expression> "OFFSET" <offset:Expression> =>
+        ast::Limit { number_rows, offset_value: Some(offset) },    
 };
 
 ExpressionList: Vec<Box<ast::Expression>> = {
     Expression => vec![<>],
-    <exprs:ExpressionList> "," <expr:Expression> => {
-        let mut result = exprs;
-        result.push(expr);
-        result
-    },
+    <exprs:ExpressionList> "," <expr:Expression> => ast::append(exprs, expr),
 };
 
 PrimaryExpression: Box<ast::Expression> = {
