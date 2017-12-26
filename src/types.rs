@@ -20,8 +20,35 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-extern crate lalrpop;
+pub enum Type {
+    Unit,
+    Primitive(Primitive),
+    Array(Primitive, usize),
+    Variant(Vec<Case>),
+    Record(Vec<Field>),
+    Tuple(Vec<Box<Type>>),
+    Function { arguments: Box<Type>, result: Box<Type> },
+}
 
-fn main() {
-    lalrpop::process_root().unwrap();
+pub enum Primitive {
+    Boolean,
+    Char(usize),
+    Varchar(usize),
+    Binary(usize),
+    Varbinary(usize),
+    Integer(usize),
+    Float(usize),
+    Date,
+    Time,
+    Timestamp,
+}
+
+pub struct Field {
+    pub label: String,
+    pub typ: Box<Type>,
+}
+
+pub struct Case {
+    pub label: String,
+    pub typ: Box<Type>,
 }
