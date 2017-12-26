@@ -8,6 +8,7 @@ pub enum Statement {
 }
 
 pub struct SelectStatement {
+    pub expr: Box<SetExpression>,
     pub order_by: Vec<Ordering>,
     pub limit: Option<Limit>,
 }
@@ -19,8 +20,23 @@ pub enum SelectMode {
 
 pub enum SetExpression {
     Values(Vec<Vec<Box<Expression>>>),
-    Query { mode: SelectMode, where_expr: Option<Box<Expression>> },
+    Query { mode: SelectMode, columns: ResultColumns, where_expr: Option<Box<Expression>>, group_by: Option<GroupBy> },
     Op { op: SetOperator, left: Box<SetExpression>, right: Box<SetExpression> },
+}
+
+pub enum ResultColumns {
+    All,
+    List(Vec<Box<ResultColumn>>)
+}
+
+pub enum ResultColumn {
+    AllFrom(String),
+    Expr { expr: Box<Expression>, rename: Option<String> },
+}
+
+pub struct GroupBy {
+    pub groupings: Vec<Box<Expression>>,
+    pub having: Option<Box<Expression>>
 }
 
 pub enum SetOperator {

@@ -12,8 +12,9 @@ Statement: ast::Statement = {
 };
 
 SelectStatement: ast::SelectStatement = {
-    TableExpressions? SelectCoreList <ordering:OrderByClause?> <limit:LimitClause?> => 
+    TableExpressions? <expr:SelectCoreList> <ordering:OrderByClause?> <limit:LimitClause?> => 
         ast::SelectStatement {
+            expr,
             order_by: ordering.unwrap_or(Vec::new()),
             limit
         },
@@ -47,8 +48,8 @@ CompoundOperator: ast::SetOperator = {
 };
 
 SelectCore: Box<ast::SetExpression> = {
-    "SELECT" <mode:SelectMode> ResultColumnList FromClause? <where_expr:WhereClause?> GroupByClause? =>
-        Box::new(ast::SetExpression::Query{ mode, where_expr }),
+    "SELECT" <mode:SelectMode> <columns:ResultColumns> FromClause? <where_expr:WhereClause?> <group_by:GroupByClause?> =>
+        Box::new(ast::SetExpression::Query{ mode, columns, where_expr, group_by }),
     "VALUES" <tuples:TupleList> => Box::new(ast::SetExpression::Values(tuples)),
 };
 
@@ -66,15 +67,22 @@ Tuple: Vec<Box<ast::Expression>> = {
     "(" <exprs:ExpressionList> ")" => exprs,
 };
 
-ResultColumnList: () = {
-    ResultColumn,
-    ResultColumnList "," ResultColumn,
+ResultColumns: ast::ResultColumns = {
+    "*" => ast::ResultColumns::All,
+    ResultColumnList => ast::ResultColumns::List(<>),
 };
 
-ResultColumn: () = {
-    Expression ("AS"? Identifier)?,
-    "*",
-    Identifier "." "*",
+ResultColumnList: Vec<Box<ast::ResultColumn>> = {
+    ResultColumn => vec![<>],
+    <columns:ResultColumnList> "," <column:ResultColumn> => ast::append(columns, column),
+};
+
+ResultColumn: Box<ast::ResultColumn> = {
+    <expr:Expression> =>
+        Box::new(ast::ResultColumn::Expr { expr, rename: None }),
+    <expr:Expression> "AS"? <rename:Identifier> =>
+        Box::new(ast::ResultColumn::Expr { expr, rename: Some(rename) }),
+    <name:Identifier> "." "*" => Box::new(ast::ResultColumn::AllFrom(name)),
 };
 
 QualifiedIdentifier: Vec<String> = {
@@ -138,9 +146,10 @@ WhereClause: Box<ast::Expression> = {
     "WHERE" <expr:Expression> => expr,
 };
 
-GroupByClause: () = {
-    "GROUP" "BY" ExpressionList,
-    "GROUP" "BY" ExpressionList "HAVING" Expression,
+GroupByClause: ast::GroupBy = {
+    "GROUP" "BY" <groupings:ExpressionList> => ast::GroupBy { groupings, having: None },
+    "GROUP" "BY" <groupings:ExpressionList> "HAVING" <expr:Expression> =>
+        ast::GroupBy { groupings, having: Some(expr) },
 };
 
 OrderByClause: Vec<ast::Ordering> = {
