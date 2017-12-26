@@ -20,8 +20,19 @@ pub enum SelectMode {
 
 pub enum SetExpression {
     Values(Vec<Vec<Box<Expression>>>),
-    Query { mode: SelectMode, columns: ResultColumns, where_expr: Option<Box<Expression>>, group_by: Option<GroupBy> },
+    Query { mode: SelectMode, columns: ResultColumns, from: Vec<Box<TableExpression>>, where_expr: Option<Box<Expression>>, group_by: Option<GroupBy> },
     Op { op: SetOperator, left: Box<SetExpression>, right: Box<SetExpression> },
+}
+
+pub enum TableExpression {
+    Named { name: Vec<String>, alias: Option<String> },
+    Select { select: SelectStatement, alias: Option<String> },
+    Join { left: Box<TableExpression>, right: Box<TableExpression>, op: JoinOperator, constraint: JoinConstraint },
+}
+
+pub enum JoinConstraint {
+    Expr(Box<Expression>),
+    Columns(Vec<String>),
 }
 
 pub enum JoinOperator {

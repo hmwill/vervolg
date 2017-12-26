@@ -48,8 +48,10 @@ CompoundOperator: ast::SetOperator = {
 };
 
 SelectCore: Box<ast::SetExpression> = {
-    "SELECT" <mode:SelectMode> <columns:ResultColumns> FromClause? <where_expr:WhereClause?> <group_by:GroupByClause?> =>
-        Box::new(ast::SetExpression::Query{ mode, columns, where_expr, group_by }),
+    "SELECT" <mode:SelectMode> <columns:ResultColumns> <where_expr:WhereClause?> <group_by:GroupByClause?> =>
+        Box::new(ast::SetExpression::Query{ mode, columns, from: Vec::new(), where_expr, group_by }),
+    "SELECT" <mode:SelectMode> <columns:ResultColumns> <from:FromClause> <where_expr:WhereClause?> <group_by:GroupByClause?> =>
+        Box::new(ast::SetExpression::Query{ mode, columns, from, where_expr, group_by }),
     "VALUES" <tuples:TupleList> => Box::new(ast::SetExpression::Values(tuples)),
 };
 
@@ -91,26 +93,27 @@ QualifiedIdentifier: Vec<String> = {
     <i1:Identifier> "." <i2:Identifier> "." <i3:Identifier> => vec![i1, i2, i3],
 };
 
-FromClause: () = {
-    "FROM" JoinClause,
+FromClause: Vec<Box<ast::TableExpression>> = {
+    "FROM" <exprs:TableExpressionList> => exprs,
 };
 
-JoinClause: () = {
+TableExpressionList: Vec<Box<ast::TableExpression>> = {
+    TableExpression => vec![<>],
+    <exprs:TableExpressionList> "," <expr:TableExpression> => ast::append(exprs, expr),
+};
+
+TableExpression: Box<ast::TableExpression> = {
     TableOrSubQuery,
-    JoinClause "," TableOrSubQuery,
-    JoinClause JoinOperator TableOrSubQuery JoinConstraint,
-
+    <left:TableExpression> <op:JoinOperator> <right:TableOrSubQuery> <constraint:JoinConstraint> =>
+        Box::new(ast::TableExpression::Join { left, op, right, constraint }),
 };
 
-TableOrSubQueryList: () = {
-    TableOrSubQuery,
-    TableOrSubQueryList "," TableOrSubQuery,
-};
-
-TableOrSubQuery: () = {
-    QualifiedIdentifier TableAlias?,
-    "(" SelectStatement ")" TableAlias?,
-    "(" JoinClause ")",
+TableOrSubQuery: Box<ast::TableExpression> = {
+    <name:QualifiedIdentifier> <alias:TableAlias?> =>
+        Box::new(ast::TableExpression::Named { name, alias }),
+    "(" <select:SelectStatement> ")" <alias:TableAlias?> =>
+        Box::new(ast::TableExpression::Select { select, alias }),
+    "(" <expr:TableExpression> ")" => expr,
 };
 
 TableAlias: String = {
@@ -130,9 +133,9 @@ JoinType: ast::JoinType = {
     "INNER" => ast::JoinType::Inner,
 };
 
-JoinConstraint: () = {
-    "ON" Expression,
-    "USING" "(" IdentifierList ")",
+JoinConstraint: ast::JoinConstraint = {
+    "ON" <expr:Expression> => ast::JoinConstraint::Expr(expr),
+    "USING" "(" <ids:IdentifierList> ")" => ast::JoinConstraint::Columns(ids),
 };
 
 IdentifierList: Vec<String> = {
