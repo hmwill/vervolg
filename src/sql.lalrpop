@@ -108,28 +108,26 @@ TableOrSubQueryList: () = {
 };
 
 TableOrSubQuery: () = {
-    QualifiedIdentifier TableAlias? IndexClause?,
+    QualifiedIdentifier TableAlias?,
     "(" SelectStatement ")" TableAlias?,
     "(" JoinClause ")",
 };
 
-TableAlias: () = {
-    "AS"? Identifier,
+TableAlias: String = {
+    "AS"? <name:Identifier> => name,
 };
 
-IndexClause: () = {
-    "INDEXED" "BY" Identifier,
-    "NOT" "INDEXED",
+JoinOperator: ast::JoinOperator = {
+    <join:JoinType?> "JOIN" => ast::JoinOperator::Join(join.unwrap_or(ast::JoinType::Inner)),
+    "NATURAL" <join:JoinType?> "JOIN" => ast::JoinOperator::Natural(join.unwrap_or(ast::JoinType::Inner)),
+    "CROSS" "JOIN" => ast::JoinOperator::Cross,
 };
 
-JoinOperator: () = {
-    "NATURAL"? JoinType? "JOIN",
-};
-
-JoinType: () = {
-    "LEFT" "OUTER"?,
-    "INNER",
-    "CROSS",
+JoinType: ast::JoinType = {
+    "LEFT" "OUTER"? => ast::JoinType::Left,
+    "RIGHT" "OUTER"? => ast::JoinType::Right,
+    "FULL" "OUTER"? => ast::JoinType::Full,
+    "INNER" => ast::JoinType::Inner,
 };
 
 JoinConstraint: () = {

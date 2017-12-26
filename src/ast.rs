@@ -24,6 +24,19 @@ pub enum SetExpression {
     Op { op: SetOperator, left: Box<SetExpression>, right: Box<SetExpression> },
 }
 
+pub enum JoinOperator {
+    Join(JoinType),
+    Natural(JoinType),
+    Cross,
+}
+
+pub enum JoinType {
+    Inner,
+    Left,
+    Right,
+    Full,
+}
+
 pub enum ResultColumns {
     All,
     List(Vec<Box<ResultColumn>>)
