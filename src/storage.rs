@@ -20,14 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
+/// This trait defines the interface between the evaluator and the storage engine.
+pub trait Storage {
 
-pub mod ast;
-pub mod sql;
-pub mod schema;
-pub mod types;
-pub mod eval;
-pub mod storage;
+}

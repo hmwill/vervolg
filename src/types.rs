@@ -20,6 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Type {
     Unit,
     Primitive(Primitive),
@@ -30,6 +31,7 @@ pub enum Type {
     Function { arguments: Box<Type>, result: Box<Type> },
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Primitive {
     Boolean,
     Char(usize),
@@ -43,11 +45,13 @@ pub enum Primitive {
     Timestamp,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Field {
     pub label: String,
     pub typ: Box<Type>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Case {
     pub label: String,
     pub typ: Box<Type>,
