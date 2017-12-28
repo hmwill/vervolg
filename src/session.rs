@@ -20,51 +20,37 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::iter::{IntoIterator, Iterator};
+use users;
 
-use csv::StringRecord;
+use super::eval;
+use super::schema;
 
-/// We are using the StringRecord type provided by the CSV library as row representation
-pub type Row = StringRecord;
-pub type Error = String;
-pub type RowResult = Result<Row, Error>;
+/// Session state maintainefor interactions with the database.
+pub struct Session {
+    /// The database object describing all known schemata
+    pub schema: schema::Database,
 
-/// Representation of a set of rows
-pub struct RowSet {
+    /// The user name associated with this session
+    pub user: String,
 
+    /// The default schema associated with this session; for now, this is the same as the user name
+    pub default_schema: String,
 }
 
-impl IntoIterator for RowSet {
-    type Item = RowResult;
-    type IntoIter = RowSetIterator;
+impl Session {
+    pub fn new() -> Session {
+        let username = users::get_current_username().unwrap();
 
-    fn into_iter(self) -> RowSetIterator {
-        RowSetIterator {
-            // TODO
+        Session {
+            schema: schema::Database::new(),
+            user: username.clone(),
+
+            // we are using the OS user name as schema
+            default_schema: username.clone()
         }
     }
-}
 
-pub struct RowSetIterator {
-
-}
-
-impl Iterator for RowSetIterator {
-    type Item = RowResult;
-
-    fn next(&mut self) -> Option<RowResult> {
-        // TODO
-        None
+    pub fn eval(&mut self, command: &str) -> Result<eval::RowSet, eval::Error> {
+        Err(String::from("Not implemented yet!"))
     }
 }
-
-/// An evaluation engine for SQL statements
-pub struct Evaluator {
-
-}
-
-/// An operator that used to construct query pipelines.
-trait Operator {
-
-}
-

@@ -21,6 +21,9 @@
 // SOFTWARE.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use csv;
 
 use super::types;
 
@@ -28,6 +31,14 @@ use super::types;
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Database {
     pub schemata: BTreeMap<String, Schema>
+}
+
+impl Database {
+    pub fn new() -> Database {
+        Database {
+            schemata: BTreeMap::new()
+        }
+    }
 }
 
 /// description of a schema within the database
@@ -63,6 +74,26 @@ pub struct Table {
     pub primary_key: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub enum TableRepresentation {
+    CsvFile { path: PathBuf },
+}
+
+/// Various options for the CSV library; ideally, this collection of parameters would reside within the
+/// CSV library and could be passed directly to the csv::ReaderBuilder constructor.
+pub struct CsvOptions {
+    pub delimiter: u8,
+    pub has_headers: bool,
+    pub flexible: bool,
+    pub terminator: csv::Terminator,
+    pub quote: u8,
+    pub escape: Option<u8>,
+    pub double_quote: bool,
+    pub quoting: bool,
+    pub comment: Option<u8>,
+    pub buffer_capacity: usize,
+}
+
 /// Description of a table within the database
 #[derive(Serialize, Deserialize, Debug)]
 pub struct View {
@@ -96,5 +127,5 @@ pub struct Column {
     pub primary_key: bool,
 
     /// the type of the column
-    pub data_type: types::Primitive,
+    pub data_type: types::DataType,
 }

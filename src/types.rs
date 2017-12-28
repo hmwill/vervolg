@@ -20,39 +20,24 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+/// The types supported by this engine
 #[derive(Serialize, Deserialize, Debug)]
-pub enum Type {
-    Unit,
-    Primitive(Primitive),
-    Array(Primitive, usize),
-    Variant(Vec<Case>),
-    Record(Vec<Field>),
-    Tuple(Vec<Box<Type>>),
-    Function { arguments: Box<Type>, result: Box<Type> },
-}
+pub enum DataType {
+    /// Generic describes values without specific type constraints
+    Generic,
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum Primitive {
-    Boolean,
-    Char(usize),
-    Varchar(usize),
-    Binary(usize),
-    Varbinary(usize),
-    Integer(usize),
-    Float(usize),
+    /// Character strings of varying length
+    Varchar,
+
+    /// Numeric values allowing for arithmetic operations
+    Numeric,
+
+    /// Date values
     Date,
+
+    /// Time values
     Time,
+
+    /// Timestamp values combining date and time information
     Timestamp,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Field {
-    pub label: String,
-    pub typ: Box<Type>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Case {
-    pub label: String,
-    pub typ: Box<Type>,
 }
