@@ -27,6 +27,8 @@ grammar;
 pub SqlStatement: ast::SqlStatement = {
     <statement: Statement> => ast::SqlStatement::Statement(statement),
     "EXPLAIN" ("QUERY" "PLAN")? <statement: Statement> => ast::SqlStatement::ExplainQueryPlan(statement),
+    <statement: AttachStatement> => ast::SqlStatement::Attach(statement),
+    <statement: DescribeStatement> => ast::SqlStatement::Describe(statement),
 };
 
 Statement: ast::Statement = {
@@ -238,6 +240,24 @@ LimitClause: ast::Limit = {
         ast::Limit { number_rows, offset_value: Some(offset) },    
 };
 
+AttachStatement: ast::AttachStatement = {
+    "ATTACH" "FILE" <path: StringLiteral> "AS" <schema: SchemaName?> <name: Identifier> => 
+        ast::AttachStatement::new(schema, name, path),
+};
+
+DescribeStatement: ast::DescribeStatement = {
+    "DESCRIBE" <schema: SchemaName?> <name: Identifier> => 
+        ast::DescribeStatement::new(schema, name),
+};
+
+SchemaName: String = {
+    <schema: Identifier> "." => schema,
+};
+
+//
+// Expressions
+//
+
 ExpressionList: Vec<Box<ast::Expression>> = {
     Expression => vec![<>],
     <exprs:ExpressionList> "," <expr:Expression> => ast::append(exprs, expr),
@@ -380,6 +400,10 @@ OrExpression: Box<ast::Expression> = {
 Expression: Box<ast::Expression> = {
     OrExpression,
 };
+
+//
+// Tokens
+//
 
 LiteralValue: ast::Literal = {
     NumericLiteral => ast::Literal::NumericLiteral(<>),

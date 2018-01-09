@@ -20,47 +20,174 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use std::iter::{IntoIterator, Iterator};
+use super::ast;
+use super::schema;
+use super::session;
+use super::sql;
+use super::Error;
 
 use csv::StringRecord;
 
 /// We are using the StringRecord type provided by the CSV library as row representation
 pub type Row = StringRecord;
-pub type Error = String;
-pub type RowResult = Result<Row, Error>;
+pub type RowResult<'a> = Result<&'a Row, Error>;
 
-/// Representation of a set of rows
-pub struct RowSet {
+/// Query plan representation
+pub struct QueryPlan {
 
 }
 
-impl IntoIterator for RowSet {
-    type Item = RowResult;
-    type IntoIter = RowSetIterator;
+pub trait RowSet {
+    fn reset(&mut self) -> Result<(), Error>;
 
-    fn into_iter(self) -> RowSetIterator {
-        RowSetIterator {
-            // TODO
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>>;
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet;
+}
+
+/// An empty row set that is returned when no result is needed
+#[derive(Debug)]
+struct EmptyRowSet {
+    meta_data: schema::RowSet
+}
+
+impl EmptyRowSet {
+    fn new() -> Self {
+        EmptyRowSet {
+            meta_data: schema::RowSet::empty()
         }
     }
 }
 
-pub struct RowSetIterator {
+impl RowSet for EmptyRowSet {
+    fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
 }
 
-impl Iterator for RowSetIterator {
-    type Item = RowResult;
+/// A meta data row set that describes schema objects
+struct MetaDataRowSet {
+    index: usize,
+    meta_data: schema::RowSet,
+    columns: schema::RowSet,
+    result_buffer: Row, 
+}
 
-    fn next(&mut self) -> Option<RowResult> {
-        // TODO
-        None
+impl MetaDataRowSet {
+    fn new(columns: schema::RowSet) -> Self {
+        MetaDataRowSet {
+            index: 0,
+            columns,
+            meta_data: schema::RowSet::meta_data(),
+            result_buffer: Row::new()
+        }
+    }
+}
+
+impl RowSet for MetaDataRowSet {
+    fn reset(&mut self) -> Result<(), Error> {
+        self.index = 0;
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        let columns = &self.columns.columns;
+
+        if self.index < columns.len() {
+            let column = &columns[self.index];
+            self.index += 1;
+
+            {
+                let result = &mut self.result_buffer;
+                result.clear();
+
+                result.push_field(&column.name);
+                result.push_field(if column.not_null {"1"} else {"0"});
+                result.push_field(if column.primary_key {"1"} else {"0"});
+                result.push_field(&format!("{}", column.data_type));
+            }
+
+            Some(Ok(&self.result_buffer))
+        } else {
+            None
+        }
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
     }
 }
 
 /// An evaluation engine for SQL statements
-pub struct Evaluator {
+pub struct Evaluator<'a>  {
+    session: &'a mut session::Session, 
+}
 
+impl <'a> Evaluator<'a> {
+    pub fn new(session: &'a mut session::Session) -> Evaluator<'a> {
+        Evaluator {
+            session
+        }
+    }
+
+    pub fn eval(&mut self, command: &str) -> Result<Box<RowSet>, Error> {
+        let ast = self.parse(command)?;
+        self.interpret(ast)
+    }
+
+    fn parse(&self, command: &str) -> Result<ast::SqlStatement, Error> {
+        let parse_result = sql::parse_SqlStatement(command);
+
+        match parse_result {
+            Ok(statement) => Ok(statement),
+            Err(err) => Err(Error::from(format!("Input `{}`: parse error {:?}", command, err))),
+        }
+    }
+
+    fn interpret(&mut self, statement: ast::SqlStatement) -> Result<Box<RowSet>, Error> {
+        match statement {
+            ast::SqlStatement::Statement(statement) => {
+                let plan = self.compile(statement)?;
+                self.execute(plan)
+            },
+            ast::SqlStatement::ExplainQueryPlan(statement) => {
+                let plan = self.compile(statement)?;
+                Err(Error::from("Explain not implemented yet!"))
+            },
+            ast::SqlStatement::Attach(info) => self.attach(info),
+            ast::SqlStatement::Describe(info) => self.describe(info),
+        }
+    }
+
+    fn compile(&self, dml: ast::Statement) -> Result<QueryPlan, Error> {
+        Err(Error::from("Compile not implemented yet!"))
+    }
+
+    fn execute(&self, plan: QueryPlan) -> Result<Box<RowSet>, Error> {
+        Err(Error::from("Execute not implemented yet!"))
+    }
+
+    fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {
+        self.session.database.attach_file(
+            info.schema.as_ref().unwrap_or(&self.session.default_schema), 
+            &info.name, &info.path)?;
+        Ok(Box::new(EmptyRowSet::new()))
+    }
+
+    fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<RowSet>, Error> {
+        let rowset = self.session.database.describe(
+            info.schema.as_ref().unwrap_or(&self.session.default_schema), 
+            &info.name)?;
+        Ok(Box::new(MetaDataRowSet::new(rowset)))
+    }
 }
 
 /// An operator that used to construct query pipelines.

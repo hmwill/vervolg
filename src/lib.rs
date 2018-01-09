@@ -35,3 +35,48 @@ pub mod types;
 pub mod eval;
 pub mod storage;
 pub mod session;
+
+/// A simple error type for this library
+pub struct Error {
+    message: String,
+    nested: Option<Box<std::error::Error>>
+}
+
+impl Error {
+    pub fn new<'a, E: 'static + std::error::Error>(message: &'a str, nested: Box<E>) -> Error {
+        Error {
+            message: String::from(message),
+            nested: Some(nested)
+        }
+    }
+}
+
+impl std::fmt::Display for Error  {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::fmt::Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "[Error] {}", self.message)
+    }
+}
+
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        &self.message
+    }
+}
+
+impl From<String> for Error {
+    fn from(val: String) -> Error {
+        Error { message: val, nested: None }
+    }
+}
+
+impl<'a> From<&'a str> for Error {
+    fn from(val: &'a str) -> Error {
+        Error { message: String::from(val), nested: None }
+    }
+} 

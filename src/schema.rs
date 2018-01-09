@@ -20,11 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::fs;
+use std::io;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use csv;
 
+use super::Error;
 use super::types;
 
 /// the logical database, which is a collection of schemata
@@ -39,6 +42,47 @@ impl Database {
             schemata: BTreeMap::new()
         }
     }
+
+    pub fn create_schema(&mut self, schema_name: &str) -> Result<(), Error> {
+        if self.schemata.contains_key(schema_name) {
+            return Err(Error::from(format!("Schema '{}' is already defined", schema_name)));
+        }
+
+        let old_value = self.schemata.insert(String::from(schema_name), Schema::new(schema_name));
+        assert!(old_value.is_none());
+        Ok(())
+    }
+
+    pub fn attach_file(&mut self, schema_name: &str, object_name: &str, path: &str) -> Result<(), Error> {
+        // validate that the schema name is valid
+        let ref mut schema = self.schemata.get_mut(schema_name)
+            .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
+
+        // validate that the name is not already in use in the schema
+        if schema.objects.contains_key(object_name) {
+            return Err(Error::from(format!("Object '{}' already defined in schema '{}'", object_name, schema_name)));
+        }
+
+        // Retrieve column information from actual data
+        let file_object = File::from_data_file(object_name, path)?;
+        schema.objects.insert(String::from(object_name), SchemaObject::File(file_object));
+        Ok(())
+    }
+
+    pub fn describe(&self, schema_name: &str, object_name: &str) -> Result<RowSet, Error> {
+        // validate that the schema name is valid
+        let schema = self.schemata.get(schema_name)
+            .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
+
+        let object = schema.objects.get(object_name)
+            .ok_or(Error::from(format!("Object '{}' not found in schema {}", object_name, schema_name)))?;
+
+        match object {
+            &SchemaObject::File(ref file) => Ok(file.rows.clone()),
+            &SchemaObject::Table(ref table) => Ok(table.rows.clone()),
+            &SchemaObject::View(ref view) => Ok(view.rows.clone()),
+        }
+    }
 }
 
 /// description of a schema within the database
@@ -51,13 +95,25 @@ pub struct Schema {
     pub objects: BTreeMap<String, SchemaObject>,
 }
 
+impl Schema {
+    fn new(name: &str) -> Self {
+        Schema {
+            name: String::from(name),
+            objects: BTreeMap::new()
+        }
+    }
+}
+
 /// currently, the only schema object types we support are tables and views
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SchemaObject {
-    /// a table object
+    /// an external CSV file
+    File(File),
+    
+    /// a table object (in-memory B-Tree)
     Table(Table),
 
-    /// a view object
+    /// a view object (query short-cut)
     View(View),
 }
 
@@ -74,9 +130,50 @@ pub struct Table {
     pub primary_key: Vec<String>,
 }
 
+/// An external CSV data file that can be accessed by the engine.
 #[derive(Serialize, Deserialize, Debug)]
-pub enum TableRepresentation {
-    CsvFile { path: PathBuf },
+pub struct File {
+    /// the name of the schema object
+    pub name: String,
+
+    /// description of the data rows that are stored in this data file
+    pub rows: RowSet,
+
+    /// the file system path to the data file
+    path: PathBuf,
+}
+
+impl File {
+    fn from_data_file(object_name: &str, path: &str) -> Result<File, Error> {
+        // ensure that the path refers to an existing file; determine column set
+        let reader_result = csv::Reader::from_path(path);
+
+        if let Err(nested) = reader_result {
+            return Err(Error::new(&format!("Could not open file '{}'", path), Box::new(nested)));
+        };
+
+        let mut reader = reader_result.unwrap();
+        let headers = reader.headers();
+
+        if let Err(nested) = headers {
+            return Err(Error::new(&format!("Could not read headers in file '{}'", path), Box::new(nested)));
+        }
+
+        let columns: Vec<Column> = headers.unwrap().iter()
+            .map(|c| Column {
+                name: String::from(c),
+                not_null: false,
+                primary_key: false,
+                data_type: types::DataType::Generic,
+            }).collect();
+
+        // create a schema object and register it
+        Ok(File {
+            name: String::from(object_name),
+            rows: RowSet { columns },
+            path: PathBuf::from(path)
+        })
+    }
 }
 
 /// Various options for the CSV library; ideally, this collection of parameters would reside within the
@@ -108,14 +205,51 @@ pub struct View {
 }
 
 /// Description of a collection of rows of the database
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RowSet {
     /// the ordered list of columns in the database
     pub columns: Vec<Column>,
 }
 
+impl RowSet {
+    pub fn empty() -> Self {
+        RowSet { columns: vec![] }
+    }
+
+    pub fn meta_data() -> Self {
+        RowSet {
+            columns: vec![
+                Column { 
+                    name: String::from("name"),
+                    not_null: true,
+                    primary_key: true,
+                    data_type: types::DataType::Varchar
+                },
+                Column { 
+                    name: String::from("not_null"),
+                    not_null: true,
+                    primary_key: false,
+                    data_type: types::DataType::Numeric
+                },
+                Column { 
+                    name: String::from("primary_key"),
+                    not_null: true,
+                    primary_key: false,
+                    data_type: types::DataType::Numeric
+                },
+                Column { 
+                    name: String::from("datatype"),
+                    not_null: true,
+                    primary_key: false,
+                    data_type: types::DataType::Varchar
+                },
+            ]
+        }
+    }
+}
+
 /// Description of a column with a data set
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Column {
     /// the name of the column
     pub name: String,

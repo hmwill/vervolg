@@ -20,9 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use super::schema;
+
+pub type Error = String;
+
 pub enum SqlStatement {
     Statement(Statement),
-    ExplainQueryPlan(Statement)
+    ExplainQueryPlan(Statement),
+    Attach(AttachStatement),
+    Describe(DescribeStatement),
+}
+
+impl SqlStatement {
+    pub fn resolve_names(self, database: &schema::Database) -> Result<SqlStatement, Error> {
+        match self {
+            SqlStatement::Statement(statement) => Ok(SqlStatement::Statement(statement.resolve_names(&database)?)),
+            SqlStatement::ExplainQueryPlan(statement) => Ok(SqlStatement::ExplainQueryPlan(statement.resolve_names(&database)?)),
+            SqlStatement::Attach(statement) => Ok(SqlStatement::Attach(statement)),
+            SqlStatement::Describe(statement) => Ok(SqlStatement::Describe(statement)),
+        }
+    }
 }
 
 pub enum Statement {
@@ -32,10 +49,30 @@ pub enum Statement {
     Update(UpdateStatement),
 }
 
+impl Statement {
+    fn resolve_names(&self, database: &schema::Database) -> Result<Statement, Error> {
+        match self {
+            &Statement::Select(ref select) => Ok(Statement::Select(select.resolve_names(&database)?)),
+            &Statement::Insert(ref insert) => Ok(Statement::Insert(insert.resolve_names(&database)?)),
+            &Statement::Delete(ref delete) => Ok(Statement::Delete(delete.resolve_names(&database)?)),
+            &Statement::Update(ref update) => Ok(Statement::Update(update.resolve_names(&database)?)),
+        }
+    }
+}
+
 pub struct InsertStatement {
     pub table_name: Vec<String>,
     pub columns: Option<Vec<String>>,
     pub source: Box<SetExpression>,
+}
+
+impl InsertStatement {
+    fn resolve_names(&self, database: &schema::Database) -> Result<InsertStatement, Error> {
+        // 1. validate the table name
+        // 2. validate the column names
+        // 3. validate the expression
+        Err(String::from("Not implemented"))
+    }
 }
 
 pub struct SelectStatement {
@@ -44,15 +81,61 @@ pub struct SelectStatement {
     pub limit: Option<Limit>,
 }
 
+impl SelectStatement {
+    fn resolve_names(&self, database: &schema::Database) -> Result<SelectStatement, Error> {
+        Err(String::from("Not implemented"))
+    }
+}
+
 pub struct DeleteStatement {
     pub table_name: Vec<String>,
     pub where_expr: Option<Box<Expression>>,
+        // 1. validate the table name
+        // 2. validate the expression
+}
+
+impl DeleteStatement {
+    fn resolve_names(&self, database: &schema::Database) -> Result<DeleteStatement, Error> {
+        Err(String::from("Not implemented"))
+    }
 }
 
 pub struct UpdateStatement {
     pub table_name: Vec<String>,
     pub assignments: Vec<Assignment>,
     pub where_expr: Option<Box<Expression>>,
+}
+
+impl UpdateStatement {
+    fn resolve_names(&self, database: &schema::Database) -> Result<UpdateStatement, Error> {
+        // 1. validate the table name
+        // 2. validate the assignments
+        // 3. validate the where expression
+        Err(String::from("Not implemented"))
+    }
+}
+
+pub struct AttachStatement {
+    pub schema: Option<String>,
+    pub name: String,
+    pub path: String,
+}
+
+impl AttachStatement {
+    pub fn new(schema: Option<String>, name: String, path: String) -> AttachStatement {
+        AttachStatement { schema, name, path }
+    }
+}
+
+pub struct DescribeStatement {
+    pub schema: Option<String>,
+    pub name: String,
+}
+
+impl DescribeStatement {
+    pub fn new(schema: Option<String>, name: String) -> DescribeStatement {
+        DescribeStatement { schema, name }
+    }
 }
 
 pub struct Assignment {

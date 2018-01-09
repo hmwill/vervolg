@@ -20,16 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::fmt;
+
 /// The types supported by this engine
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum DataType {
-    /// Generic describes values without specific type constraints
+    /// Generic describes values without specific type constraints; will be parsed and converted on demand
     Generic,
 
     /// Character strings of varying length
     Varchar,
 
-    /// Numeric values allowing for arithmetic operations
+    /// Numeric values allowing for arithmetic operations; we'll add specializatiions later
     Numeric,
 
     /// Date values
@@ -40,4 +42,21 @@ pub enum DataType {
 
     /// Timestamp values combining date and time information
     Timestamp,
+
+    /// Geospatial data type 
+    Geometry,
+}
+
+impl fmt::Display for DataType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Generic => write!(f, "GENERIC"),
+            Varchar => write!(f, "VARCHAR"),
+            Numeric => write!(f, "NUMERIC"),
+            Date => write!(f, "DATE"),
+            Time => write!(f, "TIME"),
+            Timestamp => write!(f, "TIMESTAMP"),
+            Geometry => write!(f, "GEOMETRY"),
+        }
+    }
 }

@@ -22,13 +22,12 @@
 
 use users;
 
-use super::eval;
 use super::schema;
 
 /// Session state maintainefor interactions with the database.
 pub struct Session {
     /// The database object describing all known schemata
-    pub schema: schema::Database,
+    pub database: schema::Database,
 
     /// The user name associated with this session
     pub user: String,
@@ -40,17 +39,15 @@ pub struct Session {
 impl Session {
     pub fn new() -> Session {
         let username = users::get_current_username().unwrap();
+        let mut database = schema::Database::new();
+        database.create_schema(&username).expect("Database expected to be empty");
 
         Session {
-            schema: schema::Database::new(),
+            database,
             user: username.clone(),
 
             // we are using the OS user name as schema
             default_schema: username.clone()
         }
-    }
-
-    pub fn eval(&mut self, command: &str) -> Result<eval::RowSet, eval::Error> {
-        Err(String::from("Not implemented yet!"))
     }
 }
