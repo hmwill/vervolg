@@ -43,7 +43,7 @@ pub enum DataType {
     /// Timestamp values combining date and time information
     Timestamp,
 
-    /// Geospatial data type 
+    /// Geospatial data type
     Geometry,
 }
 

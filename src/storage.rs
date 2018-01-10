@@ -21,6 +21,4 @@
 // SOFTWARE.
 
 /// This trait defines the interface between the evaluator and the storage engine.
-pub trait Storage {
-
-}
+pub trait Storage {}

@@ -39,19 +39,19 @@ pub mod session;
 /// A simple error type for this library
 pub struct Error {
     message: String,
-    nested: Option<Box<std::error::Error>>
+    nested: Option<Box<std::error::Error>>,
 }
 
 impl Error {
     pub fn new<'a, E: 'static + std::error::Error>(message: &'a str, nested: Box<E>) -> Error {
         Error {
             message: String::from(message),
-            nested: Some(nested)
+            nested: Some(nested),
         }
     }
 }
 
-impl std::fmt::Display for Error  {
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.message)
     }
@@ -71,12 +71,18 @@ impl std::error::Error for Error {
 
 impl From<String> for Error {
     fn from(val: String) -> Error {
-        Error { message: val, nested: None }
+        Error {
+            message: val,
+            nested: None,
+        }
     }
 }
 
 impl<'a> From<&'a str> for Error {
     fn from(val: &'a str) -> Error {
-        Error { message: String::from(val), nested: None }
+        Error {
+            message: String::from(val),
+            nested: None,
+        }
     }
-} 
+}

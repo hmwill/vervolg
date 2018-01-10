@@ -40,14 +40,16 @@ impl Session {
     pub fn new() -> Session {
         let username = users::get_current_username().unwrap();
         let mut database = schema::Database::new();
-        database.create_schema(&username).expect("Database expected to be empty");
+        database.create_schema(&username).expect(
+            "Database expected to be empty",
+        );
 
         Session {
             database,
             user: username.clone(),
 
             // we are using the OS user name as schema
-            default_schema: username.clone()
+            default_schema: username.clone(),
         }
     }
 }

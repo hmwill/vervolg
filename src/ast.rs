@@ -34,8 +34,12 @@ pub enum SqlStatement {
 impl SqlStatement {
     pub fn resolve_names(self, database: &schema::Database) -> Result<SqlStatement, Error> {
         match self {
-            SqlStatement::Statement(statement) => Ok(SqlStatement::Statement(statement.resolve_names(&database)?)),
-            SqlStatement::ExplainQueryPlan(statement) => Ok(SqlStatement::ExplainQueryPlan(statement.resolve_names(&database)?)),
+            SqlStatement::Statement(statement) => Ok(SqlStatement::Statement(
+                statement.resolve_names(&database)?,
+            )),
+            SqlStatement::ExplainQueryPlan(statement) => Ok(SqlStatement::ExplainQueryPlan(
+                statement.resolve_names(&database)?,
+            )),
             SqlStatement::Attach(statement) => Ok(SqlStatement::Attach(statement)),
             SqlStatement::Describe(statement) => Ok(SqlStatement::Describe(statement)),
         }
@@ -52,10 +56,18 @@ pub enum Statement {
 impl Statement {
     fn resolve_names(&self, database: &schema::Database) -> Result<Statement, Error> {
         match self {
-            &Statement::Select(ref select) => Ok(Statement::Select(select.resolve_names(&database)?)),
-            &Statement::Insert(ref insert) => Ok(Statement::Insert(insert.resolve_names(&database)?)),
-            &Statement::Delete(ref delete) => Ok(Statement::Delete(delete.resolve_names(&database)?)),
-            &Statement::Update(ref update) => Ok(Statement::Update(update.resolve_names(&database)?)),
+            &Statement::Select(ref select) => Ok(
+                Statement::Select(select.resolve_names(&database)?),
+            ),
+            &Statement::Insert(ref insert) => Ok(
+                Statement::Insert(insert.resolve_names(&database)?),
+            ),
+            &Statement::Delete(ref delete) => Ok(
+                Statement::Delete(delete.resolve_names(&database)?),
+            ),
+            &Statement::Update(ref update) => Ok(
+                Statement::Update(update.resolve_names(&database)?),
+            ),
         }
     }
 }
@@ -140,24 +152,45 @@ impl DescribeStatement {
 
 pub struct Assignment {
     pub columns: Vec<String>,
-    pub expr: Box<Expression>
+    pub expr: Box<Expression>,
 }
 
 pub enum SelectMode {
     All,
-    Distinct
+    Distinct,
 }
 
 pub enum SetExpression {
     Values(Vec<Vec<Box<Expression>>>),
-    Query { mode: SelectMode, columns: ResultColumns, from: Vec<Box<TableExpression>>, where_expr: Option<Box<Expression>>, group_by: Option<GroupBy> },
-    Op { op: SetOperator, left: Box<SetExpression>, right: Box<SetExpression> },
+    Query {
+        mode: SelectMode,
+        columns: ResultColumns,
+        from: Vec<Box<TableExpression>>,
+        where_expr: Option<Box<Expression>>,
+        group_by: Option<GroupBy>,
+    },
+    Op {
+        op: SetOperator,
+        left: Box<SetExpression>,
+        right: Box<SetExpression>,
+    },
 }
 
 pub enum TableExpression {
-    Named { name: Vec<String>, alias: Option<String> },
-    Select { select: SelectStatement, alias: Option<String> },
-    Join { left: Box<TableExpression>, right: Box<TableExpression>, op: JoinOperator, constraint: JoinConstraint },
+    Named {
+        name: Vec<String>,
+        alias: Option<String>,
+    },
+    Select {
+        select: SelectStatement,
+        alias: Option<String>,
+    },
+    Join {
+        left: Box<TableExpression>,
+        right: Box<TableExpression>,
+        op: JoinOperator,
+        constraint: JoinConstraint,
+    },
 }
 
 pub enum JoinConstraint {
@@ -180,17 +213,20 @@ pub enum JoinType {
 
 pub enum ResultColumns {
     All,
-    List(Vec<Box<ResultColumn>>)
+    List(Vec<Box<ResultColumn>>),
 }
 
 pub enum ResultColumn {
     AllFrom(String),
-    Expr { expr: Box<Expression>, rename: Option<String> },
+    Expr {
+        expr: Box<Expression>,
+        rename: Option<String>,
+    },
 }
 
 pub struct GroupBy {
     pub groupings: Vec<Box<Expression>>,
-    pub having: Option<Box<Expression>>
+    pub having: Option<Box<Expression>>,
 }
 
 pub enum SetOperator {
@@ -234,14 +270,36 @@ pub enum Expression {
     MakeTuple(Vec<Box<Expression>>),
     Select(SelectStatement),
 
-    Unary { op: UnaryOperator, expr: Box<Expression> },
-    Binary { op: BinaryOperator, left: Box<Expression>, right: Box<Expression> },
-    Comparison { op: ComparisonOperator, left: Box<Expression>, right: Box<Expression> },
+    Unary {
+        op: UnaryOperator,
+        expr: Box<Expression>,
+    },
+    Binary {
+        op: BinaryOperator,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
+    Comparison {
+        op: ComparisonOperator,
+        left: Box<Expression>,
+        right: Box<Expression>,
+    },
 
-    In { expr: Box<Expression>, set: SetSpecification },
-    Between { expr: Box<Expression>, lower: Box<Expression>, upper: Box<Expression> },
+    In {
+        expr: Box<Expression>,
+        set: SetSpecification,
+    },
+    Between {
+        expr: Box<Expression>,
+        lower: Box<Expression>,
+        upper: Box<Expression>,
+    },
 
-    Case { expr: Box<Expression>, when_part: Vec<WhenClause>, else_part: Option<Box<Expression>> },
+    Case {
+        expr: Box<Expression>,
+        when_part: Vec<WhenClause>,
+        else_part: Option<Box<Expression>>,
+    },
 }
 
 pub enum SetSpecification {

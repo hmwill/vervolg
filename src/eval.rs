@@ -33,9 +33,7 @@ pub type Row = StringRecord;
 pub type RowResult<'a> = Result<&'a Row, Error>;
 
 /// Query plan representation
-pub struct QueryPlan {
-
-}
+pub struct QueryPlan {}
 
 pub trait RowSet {
     fn reset(&mut self) -> Result<(), Error>;
@@ -48,14 +46,12 @@ pub trait RowSet {
 /// An empty row set that is returned when no result is needed
 #[derive(Debug)]
 struct EmptyRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl EmptyRowSet {
     fn new() -> Self {
-        EmptyRowSet {
-            meta_data: schema::RowSet::empty()
-        }
+        EmptyRowSet { meta_data: schema::RowSet::empty() }
     }
 }
 
@@ -78,7 +74,7 @@ struct MetaDataRowSet {
     index: usize,
     meta_data: schema::RowSet,
     columns: schema::RowSet,
-    result_buffer: Row, 
+    result_buffer: Row,
 }
 
 impl MetaDataRowSet {
@@ -87,7 +83,7 @@ impl MetaDataRowSet {
             index: 0,
             columns,
             meta_data: schema::RowSet::meta_data(),
-            result_buffer: Row::new()
+            result_buffer: Row::new(),
         }
     }
 }
@@ -110,8 +106,8 @@ impl RowSet for MetaDataRowSet {
                 result.clear();
 
                 result.push_field(&column.name);
-                result.push_field(if column.not_null {"1"} else {"0"});
-                result.push_field(if column.primary_key {"1"} else {"0"});
+                result.push_field(if column.not_null { "1" } else { "0" });
+                result.push_field(if column.primary_key { "1" } else { "0" });
                 result.push_field(&format!("{}", column.data_type));
             }
 
@@ -127,15 +123,13 @@ impl RowSet for MetaDataRowSet {
 }
 
 /// An evaluation engine for SQL statements
-pub struct Evaluator<'a>  {
-    session: &'a mut session::Session, 
+pub struct Evaluator<'a> {
+    session: &'a mut session::Session,
 }
 
-impl <'a> Evaluator<'a> {
+impl<'a> Evaluator<'a> {
     pub fn new(session: &'a mut session::Session) -> Evaluator<'a> {
-        Evaluator {
-            session
-        }
+        Evaluator { session }
     }
 
     pub fn eval(&mut self, command: &str) -> Result<Box<RowSet>, Error> {
@@ -148,7 +142,9 @@ impl <'a> Evaluator<'a> {
 
         match parse_result {
             Ok(statement) => Ok(statement),
-            Err(err) => Err(Error::from(format!("Input `{}`: parse error {:?}", command, err))),
+            Err(err) => Err(Error::from(
+                format!("Input `{}`: parse error {:?}", command, err),
+            )),
         }
     }
 
@@ -157,11 +153,11 @@ impl <'a> Evaluator<'a> {
             ast::SqlStatement::Statement(statement) => {
                 let plan = self.compile(statement)?;
                 self.execute(plan)
-            },
+            }
             ast::SqlStatement::ExplainQueryPlan(statement) => {
                 let plan = self.compile(statement)?;
                 Err(Error::from("Explain not implemented yet!"))
-            },
+            }
             ast::SqlStatement::Attach(info) => self.attach(info),
             ast::SqlStatement::Describe(info) => self.describe(info),
         }
@@ -177,21 +173,40 @@ impl <'a> Evaluator<'a> {
 
     fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {
         self.session.database.attach_file(
-            info.schema.as_ref().unwrap_or(&self.session.default_schema), 
-            &info.name, &info.path)?;
+            info.schema.as_ref().unwrap_or(
+                &self.session.default_schema,
+            ),
+            &info.name,
+            &info.path,
+        )?;
         Ok(Box::new(EmptyRowSet::new()))
     }
 
     fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<RowSet>, Error> {
         let rowset = self.session.database.describe(
-            info.schema.as_ref().unwrap_or(&self.session.default_schema), 
-            &info.name)?;
+            info.schema.as_ref().unwrap_or(
+                &self.session.default_schema,
+            ),
+            &info.name,
+        )?;
         Ok(Box::new(MetaDataRowSet::new(rowset)))
     }
 }
 
 /// An operator that used to construct query pipelines.
-trait Operator {
+trait Operator {}
 
-}
+/*
 
+Operator types:
+
+- full table scan
+- map
+- filter
+- sort
+- accumulate
+- group by
+- sorted join
+- limit
+
+*/
