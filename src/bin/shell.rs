@@ -20,10 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+extern crate tabwriter;
 extern crate vervolg;
 
 use std::io::prelude::*;
 use std::io;
+
+use tabwriter::TabWriter;
 
 fn main() {
     let mut input_line = String::new();
@@ -45,12 +48,25 @@ fn main() {
 
                 match result {
                     Ok(mut rowset) => {
+                        let stdout = io::stdout();
+                        let mut handle = stdout.lock();
+                        let mut tw = TabWriter::new(handle);
+
                         while let Some(row) = rowset.next() {
-                            println!("{:?}", row);
+                            if row.is_ok() {
+                                for field in row.unwrap().iter() {
+                                    let variable: &str = field;
+                                    write!(tw, "{}\t", variable).unwrap();
+                                }
+
+                                write!(tw, "\n").unwrap();
+                            }
                         }
+
+                        tw.flush().unwrap();
                     },
                     Err(err) => {
-                        println!("Error: {:?}", err);
+                        println!("{}", err);
                     }
                 }
             }
