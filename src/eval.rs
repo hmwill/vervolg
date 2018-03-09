@@ -122,6 +122,270 @@ impl RowSet for MetaDataRowSet {
     }
 }
 
+struct FullTableScanRowSet {
+    table_name: String,
+    meta_data: schema::RowSet,
+}
+
+impl FullTableScanRowSet {
+    fn new(table_name: String, meta_data: schema::RowSet) -> Self {
+        FullTableScanRowSet { 
+            table_name,
+            meta_data
+        }
+    }
+}
+
+impl RowSet for FullTableScanRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct LiteralRowSet {
+    meta_data: schema::RowSet,
+}
+
+impl LiteralRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        LiteralRowSet { 
+            meta_data
+        }
+    }
+}
+
+impl RowSet for LiteralRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct FilterRowSet {
+    meta_data: schema::RowSet
+}
+
+impl FilterRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        FilterRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for FilterRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct ProjectRowSet {
+    meta_data: schema::RowSet
+}
+
+impl ProjectRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        ProjectRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for ProjectRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct AggregateRowSet {
+    meta_data: schema::RowSet
+}
+
+impl AggregateRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        AggregateRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for AggregateRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct GroupByRowSet {
+    meta_data: schema::RowSet
+}
+
+impl GroupByRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        GroupByRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for GroupByRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct SortRowSet {
+    meta_data: schema::RowSet
+}
+
+impl SortRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        SortRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for SortRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
+struct LimitRowSet {
+    nested: Box<RowSet>,
+    counter: usize,
+    offset: usize,
+    limit: usize
+}
+
+impl LimitRowSet {
+    fn new(nested: Box<RowSet>, limit: usize, offset: usize) -> Self {
+        LimitRowSet {
+            nested,
+            counter: 0,
+            limit, offset
+        }
+    }
+}
+
+impl RowSet for LimitRowSet {
+    fn reset(&mut self) -> Result<(), Error> {
+        self.counter = 0;
+        self.nested.reset()    
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        // skip until the first row to return
+        while self.counter < self.offset {
+            let result = self.nested.next();
+
+            if result.is_none() {
+                return None;
+            }        
+
+            self.counter += 1;
+        }
+
+        // have we reached the overall limit of rows to return?
+        if self.counter >= self.offset + self.limit {
+            return None
+        }
+
+        let result = self.nested.next();
+
+        if result.is_some() {
+            self.counter += 1;
+        }
+
+        result
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.nested.meta()
+    }
+}
+
+struct SortedJoinRowSet {
+    meta_data: schema::RowSet
+}
+
+impl SortedJoinRowSet {
+    fn new(meta_data: schema::RowSet) -> Self {
+        SortedJoinRowSet {
+            meta_data,
+        }
+    }
+}
+
+impl RowSet for SortedJoinRowSet {
+        fn reset(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
+        None
+    }
+
+    fn meta<'a>(&'a self) -> &'a schema::RowSet {
+        &self.meta_data
+    }
+}
+
 /// An evaluation engine for SQL statements
 pub struct Evaluator<'a> {
     session: &'a mut session::Session,
@@ -151,11 +415,10 @@ impl<'a> Evaluator<'a> {
     fn interpret(&mut self, statement: ast::SqlStatement) -> Result<Box<RowSet>, Error> {
         match statement {
             ast::SqlStatement::Statement(statement) => {
-                let plan = self.compile(statement)?;
-                self.execute(plan)
+                self.compile(statement)
             }
             ast::SqlStatement::ExplainQueryPlan(statement) => {
-                let plan = self.compile(statement)?;
+                let _ = self.compile(statement)?;
                 Err(Error::from("Explain not implemented yet!"))
             }
             ast::SqlStatement::Attach(info) => self.attach(info),
@@ -163,12 +426,55 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile(&self, dml: ast::Statement) -> Result<QueryPlan, Error> {
-        Err(Error::from("Compile not implemented yet!"))
+    fn compile(&self, dml: ast::Statement) -> Result<Box<RowSet>, Error> {
+        match dml {
+            ast::Statement::Select(select) => self.compile_select(select),
+            _ => Err(Error::from("Compile not implemented yet for these statement types!"))
+
+        }
     }
 
-    fn execute(&self, plan: QueryPlan) -> Result<Box<RowSet>, Error> {
-        Err(Error::from("Execute not implemented yet!"))
+    fn compile_select(&self, select: ast::SelectStatement) -> Result<Box<RowSet>, Error> {
+        // compile the expression
+        let rowset = self.compile_set_expression(&select.expr);
+
+        // do we have a sorting clause?
+        if !select.order_by.is_empty() {
+            return Err(Error::from("Sorting not implemented yet"));
+        }
+
+        // do we have a limit clause?
+        if select.limit.is_some() {
+            let limit = select.limit.unwrap();
+            let offset = 0; // TODO implement evaluation of expression
+            let row_count = 0; // TODO implement evaluation of expression
+            Ok(Box::new(LimitRowSet::new(rowset?, offset, row_count)))
+        } else {
+            rowset
+        }
+    }
+
+    fn compile_set_expression(&self, expr: &ast::SetExpression) -> Result<Box<RowSet>, Error> {
+        match expr {
+            &ast::SetExpression::Values(ref values) => unimplemented!(),
+            &ast::SetExpression::Op { ref op, ref left, ref right } => unimplemented!(),
+            &ast::SetExpression::Query { ref mode, ref columns, ref from, ref where_expr, ref group_by} => {
+                assert!(match mode { &ast::SelectMode::All => true, _ => false });
+                assert!(match columns { &ast::ResultColumns::All => true, _ => false });
+                assert!(where_expr.is_none());
+                assert!(group_by.is_none());
+                assert!(from.len() == 1);
+                self.compile_table_expression(from[0].as_ref())
+            }
+        }
+    }
+
+    fn compile_table_expression(&self, expr: &ast::TableExpression) -> Result<Box<RowSet>, Error> {
+        match expr {
+            &ast::TableExpression::Named { ref name, ref alias } => unimplemented!(),
+            &ast::TableExpression::Select { ref select, ref alias } => unimplemented!(),
+            &ast::TableExpression::Join { ref left, ref right, ref op, ref constraint } => unimplemented!()
+        }
     }
 
     fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {

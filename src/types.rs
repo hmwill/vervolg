@@ -50,13 +50,13 @@ pub enum DataType {
 impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            Generic => write!(f, "GENERIC"),
-            Varchar => write!(f, "VARCHAR"),
-            Numeric => write!(f, "NUMERIC"),
-            Date => write!(f, "DATE"),
-            Time => write!(f, "TIME"),
-            Timestamp => write!(f, "TIMESTAMP"),
-            Geometry => write!(f, "GEOMETRY"),
+            &DataType::Generic => write!(f, "GENERIC"),
+            &DataType::Varchar => write!(f, "VARCHAR"),
+            &DataType::Numeric => write!(f, "NUMERIC"),
+            &DataType::Date => write!(f, "DATE"),
+            &DataType::Time => write!(f, "TIME"),
+            &DataType::Timestamp => write!(f, "TIMESTAMP"),
+            &DataType::Geometry => write!(f, "GEOMETRY"),
         }
     }
 }
