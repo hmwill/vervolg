@@ -1,11 +1,14 @@
 [package]
 name = "vervolg"
 version = "0.1.0"
+description = "SQL-frontend in Rust"
 authors = ["Hans-Martin Will <hwill@acm.org>"]
 build = "build.rs"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/hmwill/vervolg"
 
 [dependencies]
-
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
