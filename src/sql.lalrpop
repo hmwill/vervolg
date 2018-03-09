@@ -68,26 +68,42 @@ Assignment: ast::Assignment = {
 };
 
 SelectStatement: ast::SelectStatement = {
-    TableExpressions? <expr:SelectCoreList> <ordering:OrderByClause?> <limit:LimitClause?> => 
+    <ctl:TableExpressions> <expr:SelectCoreList> <ordering:OrderByClause?> <limit:LimitClause?> => 
         ast::SelectStatement {
+            common: ctl,
+            expr,
+            order_by: ordering.unwrap_or(Vec::new()),
+            limit
+        },
+    <expr:SelectCoreList> <ordering:OrderByClause?> <limit:LimitClause?> => 
+        ast::SelectStatement {
+            common: vec![],
             expr,
             order_by: ordering.unwrap_or(Vec::new()),
             limit
         },
 };
 
-TableExpressions: () = {
-    "WITH" "RECURSIVE"? CommonTableExpressionList,
+TableExpressions: Vec<ast::CommonTableExpression> = {
+    "WITH" <ctl:CommonTableExpressionList> => ctl,
 };
 
-CommonTableExpressionList: () = {
-    CommonTableExpression,
-    CommonTableExpressionList "," CommonTableExpression,
+CommonTableExpressionList: Vec<ast::CommonTableExpression> = {
+    <cte:CommonTableExpression> => vec![cte],
+    <ctl:CommonTableExpressionList> "," <cte:CommonTableExpression> => ast::append(ctl, cte),
 };
 
-CommonTableExpression: () = {
-    Identifier "AS" "(" SelectStatement ")",
-    Identifier "(" IdentifierList ")" "AS" "(" SelectStatement ")",
+CommonTableExpression: ast::CommonTableExpression = {
+    <id:Identifier> "AS" "(" <query:SelectStatement> ")" => ast::CommonTableExpression {
+        identifier: id,
+        column_names: None,
+        query,
+    },
+    <id:Identifier> "(" <column_names:IdentifierList> ")" "AS" "(" <query: SelectStatement> ")" => ast::CommonTableExpression {
+        identifier: id,
+        column_names: Some(column_names),
+        query,
+    },
 };
 
 SelectCoreList: Box<ast::SetExpression> = {

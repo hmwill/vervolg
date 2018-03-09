@@ -87,7 +87,14 @@ impl InsertStatement {
     }
 }
 
+pub struct CommonTableExpression {
+    pub identifier: String,
+    pub column_names: Option<Vec<String>>,
+    pub query: SelectStatement,
+}
+
 pub struct SelectStatement {
+    pub common: Vec<CommonTableExpression>,
     pub expr: Box<SetExpression>,
     pub order_by: Vec<Ordering>,
     pub limit: Option<Limit>,
