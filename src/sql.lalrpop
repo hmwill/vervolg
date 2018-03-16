@@ -33,29 +33,29 @@ pub SqlStatement: ast::SqlStatement = {
 
 Statement: ast::Statement = {
     SelectStatement => ast::Statement::Select(<>),
-    InsertStatement,
-    DeleteStatement,
-    UpdateStatement,
+    InsertStatement => ast::Statement::Insert(<>),
+    DeleteStatement => ast::Statement::Delete(<>),
+    UpdateStatement => ast::Statement::Update(<>),
 };
 
-InsertStatement: ast::Statement = {
+InsertStatement: ast::InsertStatement = {
     TableExpressions? "INSERT" "INTO" <table_name:QualifiedIdentifier> <columns:ColumnNameList?> <source:SelectCore> =>
-        ast::Statement::Insert(ast::InsertStatement { table_name, columns, source }), 
+        ast::InsertStatement { table_name, columns, source }, 
 };
 
 ColumnNameList: Vec<String> = {
     "(" <ids:IdentifierList> ")" => ids,
 };
 
-DeleteStatement: ast::Statement = {
+DeleteStatement: ast::DeleteStatement = {
     TableExpressions? "DELETE" "FROM" <table_name:QualifiedIdentifier> <where_expr:WhereClause?> =>
-        ast::Statement::Delete(ast::DeleteStatement { table_name, where_expr }),
+        ast::DeleteStatement { table_name, where_expr },
 };
 
-UpdateStatement: ast::Statement = {
+UpdateStatement: ast::UpdateStatement = {
     TableExpressions? "UPDATE" <table_name:QualifiedIdentifier> 
     "SET" <assignments: Assignments> <where_expr:WhereClause?> =>
-        ast::Statement::Update(ast::UpdateStatement { table_name, assignments, where_expr }),
+        ast::UpdateStatement { table_name, assignments, where_expr },
 };
 
 Assignments: Vec<ast::Assignment> = {
