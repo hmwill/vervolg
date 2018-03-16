@@ -35,6 +35,7 @@ pub mod types;
 pub mod eval;
 pub mod storage;
 pub mod session;
+pub mod algebra;
 
 /// A simple error type for this library
 pub struct Error {
