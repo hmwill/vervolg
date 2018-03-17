@@ -40,45 +40,11 @@ pub enum SqlStatement {
     Describe(DescribeStatement),
 }
 
-impl SqlStatement {
-    pub fn resolve_names(self, database: &schema::Database) -> Result<SqlStatement, Error> {
-        match self {
-            SqlStatement::Statement(statement) => Ok(SqlStatement::Statement(
-                statement.resolve_names(&database)?,
-            )),
-            SqlStatement::ExplainQueryPlan(statement) => Ok(SqlStatement::ExplainQueryPlan(
-                statement.resolve_names(&database)?,
-            )),
-            SqlStatement::Attach(statement) => Ok(SqlStatement::Attach(statement)),
-            SqlStatement::Describe(statement) => Ok(SqlStatement::Describe(statement)),
-        }
-    }
-}
-
 pub enum Statement {
     Select(SelectStatement),
     Insert(InsertStatement),
     Delete(DeleteStatement),
     Update(UpdateStatement),
-}
-
-impl Statement {
-    fn resolve_names(&self, database: &schema::Database) -> Result<Statement, Error> {
-        match self {
-            &Statement::Select(ref select) => Ok(
-                Statement::Select(select.resolve_names(&database)?),
-            ),
-            &Statement::Insert(ref insert) => Ok(
-                Statement::Insert(insert.resolve_names(&database)?),
-            ),
-            &Statement::Delete(ref delete) => Ok(
-                Statement::Delete(delete.resolve_names(&database)?),
-            ),
-            &Statement::Update(ref update) => Ok(
-                Statement::Update(update.resolve_names(&database)?),
-            ),
-        }
-    }
 }
 
 /// Representation of an insert statement
@@ -92,15 +58,6 @@ pub struct InsertStatement {
 
     /// An expression that will yield the rows to insert
     pub source: Box<SetExpression>,
-}
-
-impl InsertStatement {
-    fn resolve_names(&self, database: &schema::Database) -> Result<InsertStatement, Error> {
-        // 1. validate the table name
-        // 2. validate the column names
-        // 3. validate the expression
-        Err(String::from("Not implemented"))
-    }
 }
 
 /// Representation of a common table expression, which provides a short-hand notation for 
@@ -133,12 +90,6 @@ pub struct SelectStatement {
     pub limit: Option<Limit>,
 }
 
-impl SelectStatement {
-    fn resolve_names(&self, database: &schema::Database) -> Result<SelectStatement, Error> {
-        Err(String::from("Not implemented"))
-    }
-}
-
 /// Represenatation of a delete statement
 pub struct DeleteStatement {
     /// the name of the table from which rows should be deleted
@@ -146,14 +97,6 @@ pub struct DeleteStatement {
 
     /// a predicate defining the rows to delete
     pub where_expr: Option<Box<Expression>>,
-}
-
-impl DeleteStatement {
-    fn resolve_names(&self, database: &schema::Database) -> Result<DeleteStatement, Error> {
-        Err(String::from("Not implemented"))
-        // 1. validate the table name
-        // 2. validate the expression
-    }
 }
 
 /// Representation of an update statement
@@ -166,15 +109,6 @@ pub struct UpdateStatement {
 
     /// a predicate restricting the set of columns to which the update should be applied
     pub where_expr: Option<Box<Expression>>,
-}
-
-impl UpdateStatement {
-    fn resolve_names(&self, database: &schema::Database) -> Result<UpdateStatement, Error> {
-        // 1. validate the table name
-        // 2. validate the assignments
-        // 3. validate the where expression
-        Err(String::from("Not implemented"))
-    }
 }
 
 /// Rerpresentation of an attach statement
@@ -475,7 +409,7 @@ pub enum Expression {
         upper: Box<Expression>,
     },
 
-    /// Casre statement
+    /// Case statement
     Case {
         expr: Box<Expression>,
         when_part: Vec<WhenClause>,
