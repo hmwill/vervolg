@@ -60,7 +60,7 @@ pub struct InsertStatement {
     pub source: Box<SetExpression>,
 }
 
-/// Representation of a common table expression, which provides a short-hand notation for 
+/// Representation of a common table expression, which provides a short-hand notation for
 /// queries within the context of a single statement.
 pub struct CommonTableExpression {
     /// the name under which we will refer to these query results in the remainder of the query

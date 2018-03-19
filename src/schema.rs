@@ -38,20 +38,21 @@ pub struct Database {
 
 impl Database {
     pub fn new() -> Database {
-        Database { schemata: BTreeMap::new() }
+        Database {
+            schemata: BTreeMap::new(),
+        }
     }
 
     pub fn create_schema(&mut self, schema_name: &str) -> Result<(), Error> {
         if self.schemata.contains_key(schema_name) {
-            return Err(Error::from(
-                format!("Schema '{}' is already defined", schema_name),
-            ));
+            return Err(Error::from(format!(
+                "Schema '{}' is already defined",
+                schema_name
+            )));
         }
 
-        let old_value = self.schemata.insert(
-            String::from(schema_name),
-            Schema::new(schema_name),
-        );
+        let old_value = self.schemata
+            .insert(String::from(schema_name), Schema::new(schema_name));
         assert!(old_value.is_none());
         Ok(())
     }
@@ -63,42 +64,35 @@ impl Database {
         path: &str,
     ) -> Result<(), Error> {
         // validate that the schema name is valid
-        let ref mut schema = self.schemata.get_mut(schema_name).ok_or(
-            Error::from(format!(
-                "Schema '{}' not found",
-                schema_name
-            )),
-        )?;
+        let ref mut schema = self.schemata
+            .get_mut(schema_name)
+            .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
 
         // validate that the name is not already in use in the schema
         if schema.objects.contains_key(object_name) {
             return Err(Error::from(format!(
                 "Object '{}' already defined in schema '{}'",
-                object_name,
-                schema_name
+                object_name, schema_name
             )));
         }
 
         // Retrieve column information from actual data
         let file_object = File::from_data_file(object_name, path)?;
-        schema.objects.insert(
-            String::from(object_name),
-            SchemaObject::File(file_object),
-        );
+        schema
+            .objects
+            .insert(String::from(object_name), SchemaObject::File(file_object));
         Ok(())
     }
 
     pub fn describe(&self, schema_name: &str, object_name: &str) -> Result<RowSet, Error> {
         // validate that the schema name is valid
-        let schema = self.schemata.get(schema_name).ok_or(Error::from(format!(
-            "Schema '{}' not found",
-            schema_name
-        )))?;
+        let schema = self.schemata
+            .get(schema_name)
+            .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
 
         let object = schema.objects.get(object_name).ok_or(Error::from(format!(
             "Object '{}' not found in schema {}",
-            object_name,
-            schema_name
+            object_name, schema_name
         )))?;
 
         match object {
@@ -192,13 +186,11 @@ impl File {
         let columns: Vec<Column> = headers
             .unwrap()
             .iter()
-            .map(|c| {
-                Column {
-                    name: String::from(c),
-                    not_null: false,
-                    primary_key: false,
-                    data_type: types::DataType::Generic,
-                }
+            .map(|c| Column {
+                name: String::from(c),
+                not_null: false,
+                primary_key: false,
+                data_type: types::DataType::Generic,
             })
             .collect();
 

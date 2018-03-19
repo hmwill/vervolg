@@ -37,8 +37,11 @@ fn main() {
         let _ = io::stdout().flush(); // Make sure the '>' prints
 
         // Read in a string from stdin
-        io::stdin().read_line(&mut input_line).ok().expect("The read line failed O:");
-        
+        io::stdin()
+            .read_line(&mut input_line)
+            .ok()
+            .expect("The read line failed O:");
+
         // If 'exit' break out of the loop.
         match input_line.trim() {
             "EXIT" => break, //This could interfere with some parsers, so be careful
@@ -64,14 +67,14 @@ fn main() {
                         }
 
                         tw.flush().unwrap();
-                    },
+                    }
                     Err(err) => {
                         println!("{}", err);
                     }
                 }
             }
         }
-        
+
         // Clear the input line so we get fresh input
         input_line.clear();
     }

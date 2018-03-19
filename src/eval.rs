@@ -51,7 +51,9 @@ struct EmptyRowSet {
 
 impl EmptyRowSet {
     fn new() -> Self {
-        EmptyRowSet { meta_data: schema::RowSet::empty() }
+        EmptyRowSet {
+            meta_data: schema::RowSet::empty(),
+        }
     }
 }
 
@@ -129,15 +131,15 @@ struct FullTableScanRowSet {
 
 impl FullTableScanRowSet {
     fn new(table_name: String, meta_data: schema::RowSet) -> Self {
-        FullTableScanRowSet { 
+        FullTableScanRowSet {
             table_name,
-            meta_data
+            meta_data,
         }
     }
 }
 
 impl RowSet for FullTableScanRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -156,14 +158,12 @@ struct LiteralRowSet {
 
 impl LiteralRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        LiteralRowSet { 
-            meta_data
-        }
+        LiteralRowSet { meta_data }
     }
 }
 
 impl RowSet for LiteralRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -177,19 +177,17 @@ impl RowSet for LiteralRowSet {
 }
 
 struct FilterRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl FilterRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        FilterRowSet {
-            meta_data,
-        }
+        FilterRowSet { meta_data }
     }
 }
 
 impl RowSet for FilterRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -203,19 +201,17 @@ impl RowSet for FilterRowSet {
 }
 
 struct ProjectRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl ProjectRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        ProjectRowSet {
-            meta_data,
-        }
+        ProjectRowSet { meta_data }
     }
 }
 
 impl RowSet for ProjectRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -229,19 +225,17 @@ impl RowSet for ProjectRowSet {
 }
 
 struct AggregateRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl AggregateRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        AggregateRowSet {
-            meta_data,
-        }
+        AggregateRowSet { meta_data }
     }
 }
 
 impl RowSet for AggregateRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -255,19 +249,17 @@ impl RowSet for AggregateRowSet {
 }
 
 struct GroupByRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl GroupByRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        GroupByRowSet {
-            meta_data,
-        }
+        GroupByRowSet { meta_data }
     }
 }
 
 impl RowSet for GroupByRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -281,19 +273,17 @@ impl RowSet for GroupByRowSet {
 }
 
 struct SortRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl SortRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        SortRowSet {
-            meta_data,
-        }
+        SortRowSet { meta_data }
     }
 }
 
 impl RowSet for SortRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -310,7 +300,7 @@ struct LimitRowSet {
     nested: Box<RowSet>,
     counter: usize,
     offset: usize,
-    limit: usize
+    limit: usize,
 }
 
 impl LimitRowSet {
@@ -318,7 +308,8 @@ impl LimitRowSet {
         LimitRowSet {
             nested,
             counter: 0,
-            limit, offset
+            limit,
+            offset,
         }
     }
 }
@@ -326,7 +317,7 @@ impl LimitRowSet {
 impl RowSet for LimitRowSet {
     fn reset(&mut self) -> Result<(), Error> {
         self.counter = 0;
-        self.nested.reset()    
+        self.nested.reset()
     }
 
     fn next<'a>(&'a mut self) -> Option<RowResult<'a>> {
@@ -336,14 +327,14 @@ impl RowSet for LimitRowSet {
 
             if result.is_none() {
                 return None;
-            }        
+            }
 
             self.counter += 1;
         }
 
         // have we reached the overall limit of rows to return?
         if self.counter >= self.offset + self.limit {
-            return None
+            return None;
         }
 
         let result = self.nested.next();
@@ -361,19 +352,17 @@ impl RowSet for LimitRowSet {
 }
 
 struct SortedJoinRowSet {
-    meta_data: schema::RowSet
+    meta_data: schema::RowSet,
 }
 
 impl SortedJoinRowSet {
     fn new(meta_data: schema::RowSet) -> Self {
-        SortedJoinRowSet {
-            meta_data,
-        }
+        SortedJoinRowSet { meta_data }
     }
 }
 
 impl RowSet for SortedJoinRowSet {
-        fn reset(&mut self) -> Result<(), Error> {
+    fn reset(&mut self) -> Result<(), Error> {
         Ok(())
     }
 
@@ -406,17 +395,16 @@ impl<'a> Evaluator<'a> {
 
         match parse_result {
             Ok(statement) => Ok(statement),
-            Err(err) => Err(Error::from(
-                format!("Input `{}`: parse error {:?}", command, err),
-            )),
+            Err(err) => Err(Error::from(format!(
+                "Input `{}`: parse error {:?}",
+                command, err
+            ))),
         }
     }
 
     fn interpret(&mut self, statement: ast::SqlStatement) -> Result<Box<RowSet>, Error> {
         match statement {
-            ast::SqlStatement::Statement(statement) => {
-                self.compile(statement)
-            }
+            ast::SqlStatement::Statement(statement) => self.compile(statement),
             ast::SqlStatement::ExplainQueryPlan(statement) => {
                 let _ = self.compile(statement)?;
                 Err(Error::from("Explain not implemented yet!"))
@@ -429,8 +417,9 @@ impl<'a> Evaluator<'a> {
     fn compile(&self, dml: ast::Statement) -> Result<Box<RowSet>, Error> {
         match dml {
             ast::Statement::Select(select) => self.compile_select(select),
-            _ => Err(Error::from("Compile not implemented yet for these statement types!"))
-
+            _ => Err(Error::from(
+                "Compile not implemented yet for these statement types!",
+            )),
         }
     }
 
@@ -457,10 +446,26 @@ impl<'a> Evaluator<'a> {
     fn compile_set_expression(&self, expr: &ast::SetExpression) -> Result<Box<RowSet>, Error> {
         match expr {
             &ast::SetExpression::Values(ref values) => unimplemented!(),
-            &ast::SetExpression::Op { ref op, ref left, ref right } => unimplemented!(),
-            &ast::SetExpression::Query { ref mode, ref columns, ref from, ref where_expr, ref group_by} => {
-                assert!(match mode { &ast::SelectMode::All => true, _ => false });
-                assert!(match columns { &ast::ResultColumns::All => true, _ => false });
+            &ast::SetExpression::Op {
+                ref op,
+                ref left,
+                ref right,
+            } => unimplemented!(),
+            &ast::SetExpression::Query {
+                ref mode,
+                ref columns,
+                ref from,
+                ref where_expr,
+                ref group_by,
+            } => {
+                assert!(match mode {
+                    &ast::SelectMode::All => true,
+                    _ => false,
+                });
+                assert!(match columns {
+                    &ast::ResultColumns::All => true,
+                    _ => false,
+                });
                 assert!(where_expr.is_none());
                 assert!(group_by.is_none());
                 assert!(from.len() == 1);
@@ -471,17 +476,26 @@ impl<'a> Evaluator<'a> {
 
     fn compile_table_expression(&self, expr: &ast::TableExpression) -> Result<Box<RowSet>, Error> {
         match expr {
-            &ast::TableExpression::Named { ref name, ref alias } => unimplemented!(),
-            &ast::TableExpression::Select { ref select, ref alias } => unimplemented!(),
-            &ast::TableExpression::Join { ref left, ref right, ref op, ref constraint } => unimplemented!()
+            &ast::TableExpression::Named {
+                ref name,
+                ref alias,
+            } => unimplemented!(),
+            &ast::TableExpression::Select {
+                ref select,
+                ref alias,
+            } => unimplemented!(),
+            &ast::TableExpression::Join {
+                ref left,
+                ref right,
+                ref op,
+                ref constraint,
+            } => unimplemented!(),
         }
     }
 
     fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {
         self.session.database.attach_file(
-            info.schema.as_ref().unwrap_or(
-                &self.session.default_schema,
-            ),
+            info.schema.as_ref().unwrap_or(&self.session.default_schema),
             &info.name,
             &info.path,
         )?;
@@ -490,9 +504,7 @@ impl<'a> Evaluator<'a> {
 
     fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<RowSet>, Error> {
         let rowset = self.session.database.describe(
-            info.schema.as_ref().unwrap_or(
-                &self.session.default_schema,
-            ),
+            info.schema.as_ref().unwrap_or(&self.session.default_schema),
             &info.name,
         )?;
         Ok(Box::new(MetaDataRowSet::new(rowset)))
