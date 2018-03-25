@@ -331,10 +331,12 @@ ComparativeExpression: Box<ast::Expression> = {
         Box::new(ast::Expression::Comparison { op: ast::ComparisonOperator::LessEqual, left, right }),
     <left:ComparativeExpression> ">=" <right:AdditiveExpression> =>
         Box::new(ast::Expression::Comparison { op: ast::ComparisonOperator::GreaterEqual, left, right }),
-    <left:ComparativeExpression> "IS" <right:AdditiveExpression> =>
-        Box::new(ast::Expression::Comparison { op: ast::ComparisonOperator::Is, left, right }),
-    <left:ComparativeExpression> "IS" "NOT" <right:AdditiveExpression> =>
-        Box::new(ast::Expression::Comparison { op: ast::ComparisonOperator::IsNot, left, right }),
+    <left:ComparativeExpression> "IS" "NULL" =>
+        Box::new(ast::Expression::Unary { op: ast::UnaryOperator::IsNull, expr: left }),
+    <left:ComparativeExpression> "IS" "NOT" "NULL" => {
+        let not_null = Box::new(ast::Expression::Unary { op: ast::UnaryOperator::IsNull, expr: left });
+        Box::new(ast::Expression::Unary { op: ast::UnaryOperator::Not, expr: not_null })
+    },
     <left:ComparativeExpression> "LIKE" <right:AdditiveExpression> =>
         Box::new(ast::Expression::Comparison { op: ast::ComparisonOperator::Like, left, right }),
 
@@ -428,6 +430,9 @@ LiteralValue: ast::Literal = {
     "CURRENT_TIME" => ast::Literal::CurrentTime,
     "CURRENT_DATE" => ast::Literal::CurrentDate,
     "CURRENT_TIMESTAMP" => ast::Literal::CurrentTimestamp,
+    "DATE" <s:StringLiteral> => ast::Literal::DateLiteral(s),
+    "TIME" <s:StringLiteral> => ast::Literal::TimeLiteral(s),
+    "TIMESTAMP" <s:StringLiteral> => ast::Literal::TimestampLiteral(s),
 };
 
 Identifier: String = r"[A-Za-z_][A-Za-z0-9_]*" => <>.to_string();

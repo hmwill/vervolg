@@ -21,9 +21,13 @@
 // SOFTWARE.
 
 use super::schema;
+use super::types;
+
+use std::collections;
+use std::mem;
 
 /// The error value; currently this is just a string
-pub type Error = String;
+pub type Error = super::Error;
 
 /// SQL statements that are supported by this implementation
 pub enum SqlStatement {
@@ -116,7 +120,7 @@ pub struct AttachStatement {
     /// an optional schema name within which we are defining a new table mapped to an external file
     pub schema: Option<String>,
 
-    /// the tbale name within the previous (or default) schema
+    /// the table name within the previous (or default) schema
     pub name: String,
 
     /// the file system path of the external file to be attached as table
@@ -354,12 +358,6 @@ pub enum ComparisonOperator {
 
     /// Like operator (string matching)
     Like,
-
-    /// IS (usually with NULL)
-    Is,
-
-    /// IS NOT (usually with NULL)
-    IsNot,
 }
 
 /// Scalar expressions
@@ -367,7 +365,7 @@ pub enum Expression {
     /// a literal value
     Literal(Literal),
 
-    /// a qualified name
+    /// a qualified name referring to an attribute of a bound relation
     QualifiedIdentifier(Vec<String>),
 
     /// tuple construction
@@ -457,6 +455,15 @@ pub enum Literal {
 
     /// the current timestamp
     CurrentTimestamp,
+
+    /// DATE literal
+    DateLiteral(String),
+
+    /// TIME literal
+    TimeLiteral(String),
+
+    /// TIMESTAMP literal
+    TimestampLiteral(String),
 }
 
 /// Sort ordering direction
@@ -494,4 +501,402 @@ pub fn append<T>(list: Vec<T>, item: T) -> Vec<T> {
     let mut result = list;
     result.push(item);
     result
+}
+
+#[derive(Clone, Debug)]
+pub enum ScalarType {
+    Tuple(Vec<ScalarType>),
+
+    Scalar { typ: types::DataType, is_null: bool },
+}
+
+impl ScalarType {
+    fn is_compatible(&self, other: &ScalarType) -> Result<bool, Error> {
+        match (self, other) {
+            (&ScalarType::Scalar { typ: typ1, is_null: null1 },
+             &ScalarType::Scalar { typ: typ2, is_null: null2 }) => {
+                if typ1 == typ2 {
+                    Ok(null1 | null2)
+                } else {
+                    Err(Error::from("Incompatible types"))
+                }
+            },
+            (&ScalarType::Tuple(ref tuple1), &ScalarType::Tuple(ref tuple2)) => {
+                if tuple1.len() != tuple2.len() {
+                    return Err(Error::from("Incompatible tuple types due to different lengths"))
+                }
+
+                tuple1.iter().zip(tuple2.iter()).fold(Ok(false), 
+                    |result, (ref left, ref right)| {
+                        let item_result = left.is_compatible(right);
+                        if result.is_err() {
+                            result
+                        } else if item_result.is_err() {
+                            item_result
+                        } else {
+                            Ok(result.unwrap() & item_result.unwrap())
+                        }
+                    })
+            },
+            _ => Err(Error::from("Incompatible types"))
+        }
+    }
+}
+
+pub enum RowType {
+
+}
+
+/// A context of bindings used to evaluate a type; for set expressions, we are interested in bindings
+/// of identifiers for relations.
+pub struct SetContext {
+    // need a reference to a schema
+
+    // need a way to capture common table expression names
+}
+
+impl SetContext {
+    fn initialize_with_schema(schema: &schema::Schema) -> Self {
+        unimplemented!()
+    }
+
+    fn define_relation(&mut self, name: String, typ: RowType) {
+        unimplemented!()
+    }
+}
+
+enum ScalarContextSymbol {
+    // a unique attribute that can be accessed directly
+    Attribute(ScalarType),
+
+    // a conflict of attribute from different relations
+    AttributeConflict,
+
+    // a relation with its constituent attributes
+    Relation(collections::HashMap<String, ScalarType>),
+}
+
+/// A context of bindings used to evaluate a type; for scalars, we are interested in bindings for
+/// identifiers of attributes of rows within a relation.
+pub struct ScalarContext {
+    // need a way to capture qualified attributes and attributes without qualification
+    symbols: collections::HashMap<String, ScalarContextSymbol>,
+}
+
+impl ScalarContext {
+    fn new() -> Self {
+        ScalarContext {
+            symbols: collections::HashMap::new(),
+        }
+    }
+
+    fn add_relation(
+        &mut self,
+        name: String,
+        attributes: Vec<(String, ScalarType)>,
+    ) -> Result<(), Error> {
+        // add the individual attributes
+        for &(ref key, ref value) in &attributes {
+            match self.symbols.get(key) {
+                None => mem::drop(
+                    self.symbols
+                        .insert(key.clone(), ScalarContextSymbol::Attribute(value.clone())),
+                ),
+                Some(&ScalarContextSymbol::Attribute(_)) => mem::drop(
+                    self.symbols
+                        .insert(key.clone(), ScalarContextSymbol::AttributeConflict),
+                ),
+                Some(&ScalarContextSymbol::AttributeConflict) => (),
+                Some(&ScalarContextSymbol::Relation(_)) => (),
+            }
+        }
+
+        // add the relationship entry
+        let map: collections::HashMap<String, ScalarType> = attributes.into_iter().collect();
+
+        match self.symbols.get(&name) {
+            Some(&ScalarContextSymbol::Relation(_)) => {
+                Err(Error::from(format!("Duplicate relation name '{}'", &name)))
+            }
+            _ => {
+                mem::drop(
+                    self.symbols
+                        .insert(name, ScalarContextSymbol::Relation(map)),
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn infer_type(&self, qualified_name: &[String]) -> Result<ScalarType, Error> {
+        match qualified_name.len() {
+            1 => match self.symbols.get(&qualified_name[0]) {
+                None => Err(Error::from(format!(
+                    "Undefined attribute name '{}'",
+                    &qualified_name[0]
+                ))),
+                Some(&ScalarContextSymbol::Attribute(ref typ)) => Ok(typ.clone()),
+                Some(&ScalarContextSymbol::AttributeConflict) => Err(Error::from(format!(
+                    "Ambiguous attribute name '{}'",
+                    &qualified_name[0]
+                ))),
+                Some(&ScalarContextSymbol::Relation(_)) => Err(Error::from(format!(
+                    "Name '{}' refers to a relation",
+                    &qualified_name[0]
+                ))),
+            },
+            2 => match self.symbols.get(&qualified_name[0]) {
+                Some(&ScalarContextSymbol::Relation(ref attributes)) => attributes
+                    .get(&qualified_name[1])
+                    .map(|t| t.clone())
+                    .ok_or_else(|| {
+                        Error::from(format!(
+                            "Name '{}' does not refer to an attribute of relation '{}'",
+                            &qualified_name[1], &qualified_name[0]
+                        ))
+                    }),
+                _ => Err(Error::from(format!(
+                    "Name '{}' does not refer to a relation",
+                    &qualified_name[0]
+                ))),
+            },
+            _ => Err(Error::from(
+                "Qualfied name needs to have 1 or 2 path components",
+            )),
+        }
+    }
+}
+
+impl SetExpression {
+    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        unimplemented!()
+    }
+}
+
+impl Expression {
+    fn infer_type(&self, context: &ScalarContext) -> Result<ScalarType, Error> {
+        match self {
+            &Expression::Literal(ref literal) => Ok(literal.infer_type()),
+
+            /// a qualified name referring to an attribute of a bound relation
+            &Expression::QualifiedIdentifier(ref qualident) => context.infer_type(qualident),
+
+            /// tuple construction
+            &Expression::MakeTuple(ref exprs) => {
+                let result: Result<Vec<ScalarType>, Error> = exprs
+                    .into_iter()
+                    .map(|ref expr| expr.infer_type(context))
+                    .collect();
+
+                Ok(ScalarType::Tuple(result?))
+            }
+
+            /// unary operation
+            &Expression::Unary { ref op, ref expr } => {
+                let expr_type = expr.infer_type(context)?;
+
+                match op {
+                    &UnaryOperator::Negate => {
+                        // should be a numeric type
+                        match expr_type {
+                            ScalarType::Scalar { typ: types::DataType::Numeric, is_null } =>
+                                Ok(expr_type.clone()), 
+                            _ => Err(Error::from("Negate operation can only be applied to numeric type")),
+                        }
+                    },
+                    &UnaryOperator::Not => {
+                        // should be a logical type
+                        match expr_type {
+                            ScalarType::Scalar { typ: types::DataType::Logical, is_null } =>
+                                Ok(expr_type.clone()), 
+                            _ => Err(Error::from("Not operation can only be applied to logical type")),
+                        }
+                    },
+                    &UnaryOperator::IsNull => {
+                        match expr_type {
+                            ScalarType::Scalar { typ, is_null } =>
+                                Ok(expr_type.clone()), 
+                            _ => Err(Error::from("Null test operation can only be applied to scalar type")),
+                        }
+                    },
+                }
+            }
+
+            /// Binary operation
+            &Expression::Binary {
+                ref op,
+                ref left,
+                ref right,
+            } => {
+                let left_type = left.infer_type(context)?;
+                let right_type = right.infer_type(context)?;
+
+                match op {
+                    &BinaryOperator::Multiply
+                    | &BinaryOperator::Divide
+                    | &BinaryOperator::Add
+                    | &BinaryOperator::Subtract =>  {
+                        // should be a numeric type
+                        match (left_type, right_type) {
+                            (ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null1 },
+                             ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null2 }) =>
+                                Ok(ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null1 | null2 }), 
+                            _ => Err(Error::from("Arithmetic operation can only be applied to numeric type")),
+                        }
+                    },
+
+                    &BinaryOperator::Concat => {
+                        // should be a varchar type
+                        match (left_type, right_type) {
+                            (ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1 },
+                             ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null2 }) =>
+                                Ok(ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1 | null2 }), 
+                            _ => Err(Error::from("Concat operation can only be applied to string type")),
+                        }
+                    },
+                        
+                    &BinaryOperator::And | &BinaryOperator::Or => { 
+                        // should be a logical type
+                        match (left_type, right_type) {
+                            (ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 },
+                             ScalarType::Scalar { typ: types::DataType::Logical, is_null: null2 }) =>
+                                Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 }), 
+                            _ => Err(Error::from("Logical operation can only be applied to logical type")),
+                        }
+                    },
+                }
+            }
+
+            /// Comparison operation
+            &Expression::Comparison {
+                ref op,
+                ref left,
+                ref right,
+            } => {
+                let left_type = left.infer_type(context)?;
+                let right_type = right.infer_type(context)?;
+
+                match op {
+                    &ComparisonOperator::Equal 
+                    | &ComparisonOperator::NotEqual =>  {
+                        match left_type.is_compatible(&right_type) {
+                            Ok(is_null) => Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null }),
+                            Err(err) => Err(err)
+                        }
+                    },
+
+                    &ComparisonOperator::LessThan 
+                    | &ComparisonOperator::LessEqual 
+                    | &ComparisonOperator::GreaterThan 
+                    | &ComparisonOperator::GreaterEqual => {
+                        match (left_type, right_type) {
+                            (ScalarType::Scalar { typ: typ1, is_null: null1},
+                             ScalarType::Scalar { typ: typ2, is_null: null2}) => {
+                                if typ1 == typ2 && typ1.is_ordered() {
+                                    Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 })
+                                } else {
+                                    Err(Error::from("Operands of comparison operator need be of an ordered scalar type"))
+                                }
+                            },
+                            _ => Err(Error::from("Operands of comparison operator need be of scalar type"))
+                        }
+                    },
+
+                    &ComparisonOperator::Like => {
+                        match (left_type, right_type) {
+                            (ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1},
+                             ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null2}) =>
+                            Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 }),
+                            _ => Err(Error::from("Operands of Like operator need be of string type"))
+                        }
+                    },
+                }
+            },
+
+            /// Set membership test
+            &Expression::In { ref expr, ref set } => {
+                unimplemented!()
+            },
+
+            /// Range check
+            &Expression::Between {
+                ref expr,
+                ref lower,
+                ref upper,
+            } => {
+                unimplemented!()
+            },
+
+            /// Case statement
+            &Expression::Case {
+                ref expr,
+                ref when_part,
+                ref else_part,
+            } => {
+                unimplemented!()
+            },
+
+            /// nested select statement
+            &Expression::Select(ref select) => unimplemented!(),
+        }
+    }
+}
+
+impl Literal {
+    fn infer_type(&self) -> ScalarType {
+        match self {
+            &Literal::StringLiteral(_) => ScalarType::Scalar {
+                typ: types::DataType::Varchar,
+                is_null: false,
+            },
+
+            /// Numeric literal
+            &Literal::NumericLiteral(_) => ScalarType::Scalar {
+                typ: types::DataType::Numeric,
+                is_null: false,
+            },
+
+            /// the NULL value
+            &Literal::Null => ScalarType::Scalar {
+                typ: types::DataType::Generic,
+                is_null: true,
+            },
+
+            /// the current time
+            &Literal::CurrentTime => ScalarType::Scalar {
+                typ: types::DataType::Time,
+                is_null: false,
+            },
+
+            /// the current date
+            &Literal::CurrentDate => ScalarType::Scalar {
+                typ: types::DataType::Date,
+                is_null: false,
+            },
+
+            /// the current timestamp
+            &Literal::CurrentTimestamp => ScalarType::Scalar {
+                typ: types::DataType::Timestamp,
+                is_null: false,
+            },
+
+            /// DATE literal
+            &Literal::DateLiteral(_) => ScalarType::Scalar {
+                typ: types::DataType::Date,
+                is_null: false,
+            },
+
+            /// TIME literal
+            &Literal::TimeLiteral(_) => ScalarType::Scalar {
+                typ: types::DataType::Time,
+                is_null: false,
+            },
+
+            /// TIMESTAMP literal
+            &Literal::TimestampLiteral(_) => ScalarType::Scalar {
+                typ: types::DataType::Timestamp,
+                is_null: false,
+            },
+        }
+    }
 }

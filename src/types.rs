@@ -23,8 +23,8 @@
 use std::fmt;
 
 /// The types supported by this engine
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
-pub enum DataType {
+#[derive(Serialize, Deserialize, PartialEq, Debug, Copy, Clone)]
+pub enum DataType {    
     /// Generic describes values without specific type constraints; will be parsed and converted on demand
     Generic,
 
@@ -33,6 +33,9 @@ pub enum DataType {
 
     /// Numeric values allowing for arithmetic operations; we'll add specializatiions later
     Numeric,
+
+    /// Logical value (Boolean type)
+    Logical,
 
     /// Date values
     Date,
@@ -51,12 +54,27 @@ impl fmt::Display for DataType {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             &DataType::Generic => write!(f, "GENERIC"),
+            &DataType::Logical => write!(f, "LOGICAL"),
             &DataType::Varchar => write!(f, "VARCHAR"),
             &DataType::Numeric => write!(f, "NUMERIC"),
             &DataType::Date => write!(f, "DATE"),
             &DataType::Time => write!(f, "TIME"),
             &DataType::Timestamp => write!(f, "TIMESTAMP"),
             &DataType::Geometry => write!(f, "GEOMETRY"),
+        }
+    }
+}
+
+impl DataType {
+    /// Can values of this type be ordered?
+    pub fn is_ordered(&self) -> bool {
+        match self {
+            &DataType::Varchar
+            | &DataType::Numeric 
+            | &DataType::Date
+            | &DataType::Time
+            | &DataType::Timestamp => true,
+            _ => false,
         }
     }
 }

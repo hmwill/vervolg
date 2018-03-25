@@ -67,6 +67,12 @@ impl std::error::Error for Error {
     fn description(&self) -> &str {
         &self.message
     }
+
+    fn cause(&self) -> Option<&std::error::Error> {
+        use std::ops::Deref;
+
+        self.nested.as_ref().map(|e| e.deref())
+    }
 }
 
 impl From<String> for Error {
