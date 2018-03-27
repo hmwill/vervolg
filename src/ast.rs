@@ -24,7 +24,9 @@ use super::schema;
 use super::types;
 
 use std::collections;
+use std::iter;
 use std::mem;
+use std::ops;
 
 /// The error value; currently this is just a string
 pub type Error = super::Error;
@@ -409,7 +411,7 @@ pub enum Expression {
 
     /// Case statement
     Case {
-        expr: Box<Expression>,
+        expr: Option<Box<Expression>>,
         when_part: Vec<WhenClause>,
         else_part: Option<Box<Expression>>,
     },
@@ -513,21 +515,33 @@ pub enum ScalarType {
 impl ScalarType {
     fn is_compatible(&self, other: &ScalarType) -> Result<bool, Error> {
         match (self, other) {
-            (&ScalarType::Scalar { typ: typ1, is_null: null1 },
-             &ScalarType::Scalar { typ: typ2, is_null: null2 }) => {
+            (
+                &ScalarType::Scalar {
+                    typ: typ1,
+                    is_null: null1,
+                },
+                &ScalarType::Scalar {
+                    typ: typ2,
+                    is_null: null2,
+                },
+            ) => {
                 if typ1 == typ2 {
                     Ok(null1 | null2)
                 } else {
                     Err(Error::from("Incompatible types"))
                 }
-            },
+            }
             (&ScalarType::Tuple(ref tuple1), &ScalarType::Tuple(ref tuple2)) => {
                 if tuple1.len() != tuple2.len() {
-                    return Err(Error::from("Incompatible tuple types due to different lengths"))
+                    return Err(Error::from(
+                        "Incompatible tuple types due to different lengths",
+                    ));
                 }
 
-                tuple1.iter().zip(tuple2.iter()).fold(Ok(false), 
-                    |result, (ref left, ref right)| {
+                tuple1
+                    .iter()
+                    .zip(tuple2.iter())
+                    .fold(Ok(false), |result, (ref left, ref right)| {
                         let item_result = left.is_compatible(right);
                         if result.is_err() {
                             result
@@ -537,31 +551,9 @@ impl ScalarType {
                             Ok(result.unwrap() & item_result.unwrap())
                         }
                     })
-            },
-            _ => Err(Error::from("Incompatible types"))
+            }
+            _ => Err(Error::from("Incompatible types")),
         }
-    }
-}
-
-pub enum RowType {
-
-}
-
-/// A context of bindings used to evaluate a type; for set expressions, we are interested in bindings
-/// of identifiers for relations.
-pub struct SetContext {
-    // need a reference to a schema
-
-    // need a way to capture common table expression names
-}
-
-impl SetContext {
-    fn initialize_with_schema(schema: &schema::Schema) -> Self {
-        unimplemented!()
-    }
-
-    fn define_relation(&mut self, name: String, typ: RowType) {
-        unimplemented!()
     }
 }
 
@@ -579,6 +571,8 @@ enum ScalarContextSymbol {
 /// A context of bindings used to evaluate a type; for scalars, we are interested in bindings for
 /// identifiers of attributes of rows within a relation.
 pub struct ScalarContext {
+    // TODO: need a reference to an underlying SetContext
+    
     // need a way to capture qualified attributes and attributes without qualification
     symbols: collections::HashMap<String, ScalarContextSymbol>,
 }
@@ -667,12 +661,6 @@ impl ScalarContext {
     }
 }
 
-impl SetExpression {
-    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
-        unimplemented!()
-    }
-}
-
 impl Expression {
     fn infer_type(&self, context: &ScalarContext) -> Result<ScalarType, Error> {
         match self {
@@ -699,25 +687,32 @@ impl Expression {
                     &UnaryOperator::Negate => {
                         // should be a numeric type
                         match expr_type {
-                            ScalarType::Scalar { typ: types::DataType::Numeric, is_null } =>
-                                Ok(expr_type.clone()), 
-                            _ => Err(Error::from("Negate operation can only be applied to numeric type")),
+                            ScalarType::Scalar {
+                                typ: types::DataType::Numeric,
+                                is_null,
+                            } => Ok(expr_type.clone()),
+                            _ => Err(Error::from(
+                                "Negate operation can only be applied to numeric type",
+                            )),
                         }
-                    },
+                    }
                     &UnaryOperator::Not => {
                         // should be a logical type
                         match expr_type {
-                            ScalarType::Scalar { typ: types::DataType::Logical, is_null } =>
-                                Ok(expr_type.clone()), 
-                            _ => Err(Error::from("Not operation can only be applied to logical type")),
+                            ScalarType::Scalar {
+                                typ: types::DataType::Logical,
+                                is_null,
+                            } => Ok(expr_type.clone()),
+                            _ => Err(Error::from(
+                                "Not operation can only be applied to logical type",
+                            )),
                         }
-                    },
-                    &UnaryOperator::IsNull => {
-                        match expr_type {
-                            ScalarType::Scalar { typ, is_null } =>
-                                Ok(expr_type.clone()), 
-                            _ => Err(Error::from("Null test operation can only be applied to scalar type")),
-                        }
+                    }
+                    &UnaryOperator::IsNull => match expr_type {
+                        ScalarType::Scalar { typ, is_null } => Ok(expr_type.clone()),
+                        _ => Err(Error::from(
+                            "Null test operation can only be applied to scalar type",
+                        )),
                     },
                 }
             }
@@ -735,35 +730,71 @@ impl Expression {
                     &BinaryOperator::Multiply
                     | &BinaryOperator::Divide
                     | &BinaryOperator::Add
-                    | &BinaryOperator::Subtract =>  {
+                    | &BinaryOperator::Subtract => {
                         // should be a numeric type
                         match (left_type, right_type) {
-                            (ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null1 },
-                             ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null2 }) =>
-                                Ok(ScalarType::Scalar { typ: types::DataType::Numeric, is_null: null1 | null2 }), 
-                            _ => Err(Error::from("Arithmetic operation can only be applied to numeric type")),
+                            (
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Numeric,
+                                    is_null: null1,
+                                },
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Numeric,
+                                    is_null: null2,
+                                },
+                            ) => Ok(ScalarType::Scalar {
+                                typ: types::DataType::Numeric,
+                                is_null: null1 | null2,
+                            }),
+                            _ => Err(Error::from(
+                                "Arithmetic operation can only be applied to numeric type",
+                            )),
                         }
-                    },
+                    }
 
                     &BinaryOperator::Concat => {
                         // should be a varchar type
                         match (left_type, right_type) {
-                            (ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1 },
-                             ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null2 }) =>
-                                Ok(ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1 | null2 }), 
-                            _ => Err(Error::from("Concat operation can only be applied to string type")),
+                            (
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Varchar,
+                                    is_null: null1,
+                                },
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Varchar,
+                                    is_null: null2,
+                                },
+                            ) => Ok(ScalarType::Scalar {
+                                typ: types::DataType::Varchar,
+                                is_null: null1 | null2,
+                            }),
+                            _ => Err(Error::from(
+                                "Concat operation can only be applied to string type",
+                            )),
                         }
-                    },
-                        
-                    &BinaryOperator::And | &BinaryOperator::Or => { 
+                    }
+
+                    &BinaryOperator::And | &BinaryOperator::Or => {
                         // should be a logical type
                         match (left_type, right_type) {
-                            (ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 },
-                             ScalarType::Scalar { typ: types::DataType::Logical, is_null: null2 }) =>
-                                Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 }), 
-                            _ => Err(Error::from("Logical operation can only be applied to logical type")),
+                            (
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Logical,
+                                    is_null: null1,
+                                },
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Logical,
+                                    is_null: null2,
+                                },
+                            ) => Ok(ScalarType::Scalar {
+                                typ: types::DataType::Logical,
+                                is_null: null1 | null2,
+                            }),
+                            _ => Err(Error::from(
+                                "Logical operation can only be applied to logical type",
+                            )),
                         }
-                    },
+                    }
                 }
             }
 
@@ -777,46 +808,64 @@ impl Expression {
                 let right_type = right.infer_type(context)?;
 
                 match op {
-                    &ComparisonOperator::Equal 
-                    | &ComparisonOperator::NotEqual =>  {
+                    &ComparisonOperator::Equal | &ComparisonOperator::NotEqual => {
                         match left_type.is_compatible(&right_type) {
-                            Ok(is_null) => Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null }),
-                            Err(err) => Err(err)
+                            Ok(is_null) => Ok(ScalarType::Scalar {
+                                typ: types::DataType::Logical,
+                                is_null,
+                            }),
+                            Err(err) => Err(err),
                         }
-                    },
+                    }
 
-                    &ComparisonOperator::LessThan 
-                    | &ComparisonOperator::LessEqual 
-                    | &ComparisonOperator::GreaterThan 
-                    | &ComparisonOperator::GreaterEqual => {
-                        match (left_type, right_type) {
-                            (ScalarType::Scalar { typ: typ1, is_null: null1},
-                             ScalarType::Scalar { typ: typ2, is_null: null2}) => {
-                                if typ1 == typ2 && typ1.is_ordered() {
-                                    Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 })
-                                } else {
-                                    Err(Error::from("Operands of comparison operator need be of an ordered scalar type"))
-                                }
+                    &ComparisonOperator::LessThan
+                    | &ComparisonOperator::LessEqual
+                    | &ComparisonOperator::GreaterThan
+                    | &ComparisonOperator::GreaterEqual => match (left_type, right_type) {
+                        (
+                            ScalarType::Scalar {
+                                typ: typ1,
+                                is_null: null1,
                             },
-                            _ => Err(Error::from("Operands of comparison operator need be of scalar type"))
+                            ScalarType::Scalar {
+                                typ: typ2,
+                                is_null: null2,
+                            },
+                        ) => {
+                            if typ1 == typ2 && typ1.is_ordered() {
+                                Ok(ScalarType::Scalar {
+                                    typ: types::DataType::Logical,
+                                    is_null: null1 | null2,
+                                })
+                            } else {
+                                Err(Error::from("Operands of comparison operator need be of an ordered scalar type"))
+                            }
                         }
+                        _ => Err(Error::from(
+                            "Operands of comparison operator need be of scalar type",
+                        )),
                     },
 
-                    &ComparisonOperator::Like => {
-                        match (left_type, right_type) {
-                            (ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null1},
-                             ScalarType::Scalar { typ: types::DataType::Varchar, is_null: null2}) =>
-                            Ok(ScalarType::Scalar { typ: types::DataType::Logical, is_null: null1 | null2 }),
-                            _ => Err(Error::from("Operands of Like operator need be of string type"))
-                        }
+                    &ComparisonOperator::Like => match (left_type, right_type) {
+                        (
+                            ScalarType::Scalar {
+                                typ: types::DataType::Varchar,
+                                is_null: null1,
+                            },
+                            ScalarType::Scalar {
+                                typ: types::DataType::Varchar,
+                                is_null: null2,
+                            },
+                        ) => Ok(ScalarType::Scalar {
+                            typ: types::DataType::Logical,
+                            is_null: null1 | null2,
+                        }),
+                        _ => Err(Error::from(
+                            "Operands of Like operator need be of string type",
+                        )),
                     },
                 }
-            },
-
-            /// Set membership test
-            &Expression::In { ref expr, ref set } => {
-                unimplemented!()
-            },
+            }
 
             /// Range check
             &Expression::Between {
@@ -824,22 +873,151 @@ impl Expression {
                 ref lower,
                 ref upper,
             } => {
-                unimplemented!()
-            },
+                let expr_type = expr.infer_type(context)?;
+                let lower_type = lower.infer_type(context)?;
+                let upper_type = upper.infer_type(context)?;
 
-            /// Case statement
+                match (expr_type, lower_type, upper_type) {
+                    (
+                        ScalarType::Scalar {
+                            typ: typ1,
+                            is_null: null1,
+                        },
+                        ScalarType::Scalar {
+                            typ: typ2,
+                            is_null: null2,
+                        },
+                        ScalarType::Scalar {
+                            typ: typ3,
+                            is_null: null3,
+                        },
+                    ) => {
+                        if typ1 == typ2 && typ1 == typ3 && typ1.is_ordered() {
+                            Ok(ScalarType::Scalar {
+                                typ: types::DataType::Logical,
+                                is_null: null1 | null2 | null3,
+                            })
+                        } else {
+                            Err(Error::from("Operands of range check expression need be of an ordered scalar type"))
+                        }
+                    }
+                    _ => Err(Error::from(
+                        "Operands of range check expression need be of scalar type",
+                    )),
+                }
+            }
+
+            /// Case statement; guards are predicates
             &Expression::Case {
-                ref expr,
+                expr: None,
                 ref when_part,
                 ref else_part,
             } => {
-                unimplemented!()
+                // All when part clauses must have a guard that evaluates to a logical value
+                let _ = fold_err((), when_part.iter(), |_, ref clause| {
+                    let guard_type = clause.guard.infer_type(&context)?;
+
+                    match guard_type {
+                        ScalarType::Scalar { typ: types::DataType::Logical, is_null: _ } =>
+                            Ok(()),
+                        _ => Err(Error::from("Case guard must evaluate to a logical type"))
+                    }
+                });
+
+                // All when part clauses must have a body that evaluates to the same type
+                assert!(when_part.len() >= 1);
+                let mut iter = when_part.iter();
+                let result_init_type = iter.next().unwrap().body.infer_type(&context)?;
+                let result_type = fold_err(result_init_type, iter, |typ, ref clause| {
+                    let body_type = clause.body.infer_type(&context)?;
+                    let is_null1 = body_type.is_compatible(&typ)?;
+                    match body_type {
+                        ScalarType::Tuple(_) => Err(Error::from("THEN clause must evaluate to scalar expression")),
+                        ScalarType::Scalar { typ, is_null } =>
+                            Ok(ScalarType::Scalar{typ, is_null: is_null | is_null1 }),
+                    }
+                })?;
+
+                // If the else part is provided, it must be compatible with the type of all the clauses
+                match (else_part, &result_type) {
+                    (&None, &ScalarType::Scalar { ref typ, is_null: _ }) => Ok(ScalarType::Scalar { typ: typ.clone(), is_null: true }),
+                    (&Some(ref body), &ScalarType::Scalar { ref typ, is_null }) => {
+                        let body_type = body.infer_type(&context)?;
+                        let is_null1 = body_type.is_compatible(&result_type)?;
+                        Ok(ScalarType::Scalar { typ: *typ, is_null: is_null1 | is_null })
+                    },
+                    _ => panic!("Should have covered all cases")
+                }
             },
 
+            /// Case statement;switch on expr value
+            &Expression::Case {
+                expr: Some(ref expr),
+                ref when_part,
+                ref else_part,
+            } => {
+                // Type of expression must allow for scalar comparison
+                let expr_type = expr.infer_type(&context)?;
+
+                // All when part clauses must have a guard that evaluates to the same type as expr
+                let _ = fold_err((), when_part.iter(), |_, ref clause| {
+                    let guard_type = clause.guard.infer_type(&context)?;
+
+                    if guard_type.is_compatible(&expr_type)? {
+                        Ok(())
+                    } else {
+                        Err(Error::from("Guard expression is incompatible with CASE expression"))
+                    }
+                });
+                
+                // All when part clauses must have a body that evalujates to the same type
+                assert!(when_part.len() >= 1);
+                let mut iter = when_part.iter();
+                let result_init_type = iter.next().unwrap().body.infer_type(&context)?;
+                let result_type = fold_err(result_init_type, iter, |typ, ref clause| {
+                    let body_type = clause.body.infer_type(&context)?;
+                    let is_null1 = body_type.is_compatible(&typ)?;
+                    match body_type {
+                        ScalarType::Tuple(_) => Err(Error::from("THEN clause must evaluate to scalar expression")),
+                        ScalarType::Scalar { typ, is_null } =>
+                            Ok(ScalarType::Scalar{typ, is_null: is_null | is_null1 }),
+                    }
+                })?;
+
+                // If the else part is provided, it must be compatible with the type of all the clauses
+                match (else_part, &result_type) {
+                    (&None, &ScalarType::Scalar { ref typ, is_null: _ }) => Ok(ScalarType::Scalar { typ: typ.clone(), is_null: true }),
+                    (&Some(ref body), &ScalarType::Scalar { ref typ, is_null }) => {
+                        let body_type = body.infer_type(&context)?;
+                        let is_null1 = body_type.is_compatible(&result_type)?;
+                        Ok(ScalarType::Scalar { typ: *typ, is_null: is_null1 | is_null })
+                    },
+                    _ => panic!("Should have covered all cases")
+                }
+            },
+
+            /// Set membership test; set should evaluate to a row set with a single column
+            &Expression::In { ref expr, ref set } => unimplemented!(),
+
             /// nested select statement
+            /// 
+            /// should evaluate to a row set with a single column (and single row upon execution)
             &Expression::Select(ref select) => unimplemented!(),
         }
     }
+}
+
+fn fold_err<S, I: iter::Iterator, F: Fn(S, I::Item) -> Result<S,Error> >(state: S, iter: I, func: F) -> Result<S, Error> {
+    let mut result = state;
+
+    for item in iter {
+        match func(result, item) {
+            Ok(val) => result = val,
+            Err(err) => { return Err(err) },
+        }
+    }
+
+    Ok(result)
 }
 
 impl Literal {
@@ -898,5 +1076,47 @@ impl Literal {
                 is_null: false,
             },
         }
+    }
+}
+
+struct Attribute {
+    name: String,
+    typ: types::DataType,
+    is_null: bool
+}
+
+pub struct RowType {
+    attributes: Vec<Attribute>,
+    primary_key: Vec<String>,
+    order_by: Vec<(String, OrderingDirection)>,
+}
+
+/// A context of bindings used to evaluate a type; for set expressions, we are interested in bindings
+/// of identifiers for relations.
+pub struct SetContext {
+    // need a reference to a schema
+
+    // need a way to capture common table expression names
+}
+
+impl SetContext {
+    fn initialize_with_schema(schema: &schema::Schema) -> Self {
+        unimplemented!()
+    }
+
+    fn define_relation(&mut self, name: String, typ: RowType) {
+        unimplemented!()
+    }
+}
+
+impl SetExpression {
+    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        unimplemented!()
+    }
+}
+
+impl SetSpecification {
+    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        unimplemented!()
     }
 }

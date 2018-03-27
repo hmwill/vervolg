@@ -386,7 +386,7 @@ ComplexExpression: Box<ast::Expression> = {
 };
 
 CaseExpression: Box<ast::Expression> = {
-    "CASE" <expr:Expression> <when_part:WhenClause+> <else_part:ElseClause?> "END" =>
+    "CASE" <expr:Expression?> <when_part:WhenClause+> <else_part:ElseClause?> "END" =>
         Box::new(ast::Expression::Case { expr, when_part, else_part }),
 };
 
