@@ -570,16 +570,18 @@ enum ScalarContextSymbol {
 
 /// A context of bindings used to evaluate a type; for scalars, we are interested in bindings for
 /// identifiers of attributes of rows within a relation.
-pub struct ScalarContext {
-    // TODO: need a reference to an underlying SetContext
-    
+pub struct ScalarContext<'a> {
+    // reference to an underlying SetContext
+    set_context: &'a SetContext<'a>,
+
     // need a way to capture qualified attributes and attributes without qualification
     symbols: collections::HashMap<String, ScalarContextSymbol>,
 }
 
-impl ScalarContext {
-    fn new() -> Self {
+impl<'a> ScalarContext<'a> {
+    fn new(set_context: &'a SetContext<'a>) -> Self {
         ScalarContext {
+            set_context,
             symbols: collections::HashMap::new(),
         }
     }
@@ -918,9 +920,11 @@ impl Expression {
                     let guard_type = clause.guard.infer_type(&context)?;
 
                     match guard_type {
-                        ScalarType::Scalar { typ: types::DataType::Logical, is_null: _ } =>
-                            Ok(()),
-                        _ => Err(Error::from("Case guard must evaluate to a logical type"))
+                        ScalarType::Scalar {
+                            typ: types::DataType::Logical,
+                            is_null: _,
+                        } => Ok(()),
+                        _ => Err(Error::from("Case guard must evaluate to a logical type")),
                     }
                 });
 
@@ -932,23 +936,39 @@ impl Expression {
                     let body_type = clause.body.infer_type(&context)?;
                     let is_null1 = body_type.is_compatible(&typ)?;
                     match body_type {
-                        ScalarType::Tuple(_) => Err(Error::from("THEN clause must evaluate to scalar expression")),
-                        ScalarType::Scalar { typ, is_null } =>
-                            Ok(ScalarType::Scalar{typ, is_null: is_null | is_null1 }),
+                        ScalarType::Tuple(_) => Err(Error::from(
+                            "THEN clause must evaluate to scalar expression",
+                        )),
+                        ScalarType::Scalar { typ, is_null } => Ok(ScalarType::Scalar {
+                            typ,
+                            is_null: is_null | is_null1,
+                        }),
                     }
                 })?;
 
                 // If the else part is provided, it must be compatible with the type of all the clauses
                 match (else_part, &result_type) {
-                    (&None, &ScalarType::Scalar { ref typ, is_null: _ }) => Ok(ScalarType::Scalar { typ: typ.clone(), is_null: true }),
+                    (
+                        &None,
+                        &ScalarType::Scalar {
+                            ref typ,
+                            is_null: _,
+                        },
+                    ) => Ok(ScalarType::Scalar {
+                        typ: typ.clone(),
+                        is_null: true,
+                    }),
                     (&Some(ref body), &ScalarType::Scalar { ref typ, is_null }) => {
                         let body_type = body.infer_type(&context)?;
                         let is_null1 = body_type.is_compatible(&result_type)?;
-                        Ok(ScalarType::Scalar { typ: *typ, is_null: is_null1 | is_null })
-                    },
-                    _ => panic!("Should have covered all cases")
+                        Ok(ScalarType::Scalar {
+                            typ: *typ,
+                            is_null: is_null1 | is_null,
+                        })
+                    }
+                    _ => panic!("Should have covered all cases"),
                 }
-            },
+            }
 
             /// Case statement;switch on expr value
             &Expression::Case {
@@ -966,10 +986,12 @@ impl Expression {
                     if guard_type.is_compatible(&expr_type)? {
                         Ok(())
                     } else {
-                        Err(Error::from("Guard expression is incompatible with CASE expression"))
+                        Err(Error::from(
+                            "Guard expression is incompatible with CASE expression",
+                        ))
                     }
                 });
-                
+
                 // All when part clauses must have a body that evalujates to the same type
                 assert!(when_part.len() >= 1);
                 let mut iter = when_part.iter();
@@ -978,42 +1000,95 @@ impl Expression {
                     let body_type = clause.body.infer_type(&context)?;
                     let is_null1 = body_type.is_compatible(&typ)?;
                     match body_type {
-                        ScalarType::Tuple(_) => Err(Error::from("THEN clause must evaluate to scalar expression")),
-                        ScalarType::Scalar { typ, is_null } =>
-                            Ok(ScalarType::Scalar{typ, is_null: is_null | is_null1 }),
+                        ScalarType::Tuple(_) => Err(Error::from(
+                            "THEN clause must evaluate to scalar expression",
+                        )),
+                        ScalarType::Scalar { typ, is_null } => Ok(ScalarType::Scalar {
+                            typ,
+                            is_null: is_null | is_null1,
+                        }),
                     }
                 })?;
 
                 // If the else part is provided, it must be compatible with the type of all the clauses
                 match (else_part, &result_type) {
-                    (&None, &ScalarType::Scalar { ref typ, is_null: _ }) => Ok(ScalarType::Scalar { typ: typ.clone(), is_null: true }),
+                    (
+                        &None,
+                        &ScalarType::Scalar {
+                            ref typ,
+                            is_null: _,
+                        },
+                    ) => Ok(ScalarType::Scalar {
+                        typ: typ.clone(),
+                        is_null: true,
+                    }),
                     (&Some(ref body), &ScalarType::Scalar { ref typ, is_null }) => {
                         let body_type = body.infer_type(&context)?;
                         let is_null1 = body_type.is_compatible(&result_type)?;
-                        Ok(ScalarType::Scalar { typ: *typ, is_null: is_null1 | is_null })
-                    },
-                    _ => panic!("Should have covered all cases")
+                        Ok(ScalarType::Scalar {
+                            typ: *typ,
+                            is_null: is_null1 | is_null,
+                        })
+                    }
+                    _ => panic!("Should have covered all cases"),
                 }
-            },
+            }
 
             /// Set membership test; set should evaluate to a row set with a single column
-            &Expression::In { ref expr, ref set } => unimplemented!(),
+            &Expression::In { ref expr, ref set } => {
+                let expr_type = expr.infer_type(context)?;
+                let set_type = set.infer_type(&context.set_context)?;
+
+                if set_type.attributes.len() != 1 {
+                    return Err(Error::from(
+                        "Set for IN expression needs to evaluate to row set with a single column",
+                    ));
+                }
+
+                if expr_type.is_compatible(&ScalarType::Scalar {
+                    typ: set_type.attributes[0].typ,
+                    is_null: set_type.attributes[0].is_null,
+                })? {
+                    Ok(ScalarType::Scalar {
+                        typ: types::DataType::Logical,
+                        is_null: false,
+                    })
+                } else {
+                    Err(Error::from("Incompatible types for IN expression"))
+                }
+            }
 
             /// nested select statement
-            /// 
+            ///
             /// should evaluate to a row set with a single column (and single row upon execution)
-            &Expression::Select(ref select) => unimplemented!(),
+            &Expression::Select(ref select) => {
+                let select_type = select.infer_type(&context.set_context)?;
+                if select_type.attributes.len() == 1 {
+                    Ok(ScalarType::Scalar {
+                        typ: select_type.attributes[0].typ,
+                        is_null: select_type.attributes[0].is_null,
+                    })
+                } else {
+                    Err(Error::from(
+                        "SELECT statement should evaluate to a single column",
+                    ))
+                }
+            }
         }
     }
 }
 
-fn fold_err<S, I: iter::Iterator, F: Fn(S, I::Item) -> Result<S,Error> >(state: S, iter: I, func: F) -> Result<S, Error> {
+fn fold_err<S, I: iter::Iterator, F: Fn(S, I::Item) -> Result<S, Error>>(
+    state: S,
+    iter: I,
+    func: F,
+) -> Result<S, Error> {
     let mut result = state;
 
     for item in iter {
         match func(result, item) {
             Ok(val) => result = val,
-            Err(err) => { return Err(err) },
+            Err(err) => return Err(err),
         }
     }
 
@@ -1082,7 +1157,7 @@ impl Literal {
 struct Attribute {
     name: String,
     typ: types::DataType,
-    is_null: bool
+    is_null: bool,
 }
 
 pub struct RowType {
@@ -1093,19 +1168,45 @@ pub struct RowType {
 
 /// A context of bindings used to evaluate a type; for set expressions, we are interested in bindings
 /// of identifiers for relations.
-pub struct SetContext {
+pub struct SetContext<'a> {
     // need a reference to a schema
+    schema: &'a schema::Schema,
 
     // need a way to capture common table expression names
+    table_expression: collections::BTreeMap<String, RowType>,
 }
 
-impl SetContext {
-    fn initialize_with_schema(schema: &schema::Schema) -> Self {
-        unimplemented!()
+impl<'a> SetContext<'a> {
+    fn new(schema: &'a schema::Schema) -> Self {
+        SetContext {
+            schema: schema,
+            table_expression: collections::BTreeMap::new(),
+        }
     }
 
-    fn define_relation(&mut self, name: String, typ: RowType) {
-        unimplemented!()
+    fn define_relation(&mut self, name: String, typ: RowType) -> Result<(), Error> {
+        match self.table_expression.insert(name.clone(), typ) {
+            None => Ok(()),
+            Some(_) => Err(Error::from(format!(
+                "Duplicate name '{}' for common table expression",
+                name
+            ))),
+        }
+    }
+
+    // Convenience function to construct SetContext from Schema and iterator over common table expressions
+    fn initialize<'c, I>(schema: &'a schema::Schema, cte: I) -> Result<Self, Error>
+    where
+        I: iter::IntoIterator<Item = &'c CommonTableExpression>,
+    {
+        let mut result = Self::new(schema);
+
+        for item in cte {
+            let row_type = item.infer_type(&result)?;
+            result.define_relation(item.identifier.clone(), row_type)?;
+        }
+
+        Ok(result)
     }
 }
 
@@ -1115,8 +1216,28 @@ impl SetExpression {
     }
 }
 
+impl TableExpression {
+    fn infer_type(&self, context: &SetContext) -> Result<ScalarContext, Error> {
+        unimplemented!()
+    }
+}
+
 impl SetSpecification {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        unimplemented!()
+    }
+}
+
+impl SelectStatement {
+    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        unimplemented!()
+    }
+}
+
+impl CommonTableExpression {
+    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+        // infer the type of the query
+        // apply the optional column subsetting/reordering
         unimplemented!()
     }
 }
