@@ -586,29 +586,39 @@ impl<'a> ScalarContext<'a> {
         }
     }
 
-    fn add_relation(
-        &mut self,
-        name: String,
-        attributes: Vec<(String, ScalarType)>,
-    ) -> Result<(), Error> {
+    fn add_relation(&mut self, name: String, attributes: Vec<Attribute>) -> Result<(), Error> {
         // add the individual attributes
-        for &(ref key, ref value) in &attributes {
-            match self.symbols.get(key) {
-                None => mem::drop(
-                    self.symbols
-                        .insert(key.clone(), ScalarContextSymbol::Attribute(value.clone())),
-                ),
-                Some(&ScalarContextSymbol::Attribute(_)) => mem::drop(
-                    self.symbols
-                        .insert(key.clone(), ScalarContextSymbol::AttributeConflict),
-                ),
+        for attribute in &attributes {
+            match self.symbols.get(&attribute.name) {
+                None => mem::drop(self.symbols.insert(
+                    attribute.name.clone(),
+                    ScalarContextSymbol::Attribute(ScalarType::Scalar {
+                        typ: attribute.typ,
+                        is_null: attribute.is_null,
+                    }),
+                )),
+                Some(&ScalarContextSymbol::Attribute(_)) => mem::drop(self.symbols.insert(
+                    attribute.name.clone(),
+                    ScalarContextSymbol::AttributeConflict,
+                )),
                 Some(&ScalarContextSymbol::AttributeConflict) => (),
                 Some(&ScalarContextSymbol::Relation(_)) => (),
             }
         }
 
         // add the relationship entry
-        let map: collections::HashMap<String, ScalarType> = attributes.into_iter().collect();
+        let map: collections::HashMap<String, ScalarType> = attributes
+            .into_iter()
+            .map(|attribute| {
+                (
+                    attribute.name,
+                    ScalarType::Scalar {
+                        typ: attribute.typ,
+                        is_null: attribute.is_null,
+                    },
+                )
+            })
+            .collect();
 
         match self.symbols.get(&name) {
             Some(&ScalarContextSymbol::Relation(_)) => {
@@ -1212,25 +1222,115 @@ impl<'a> SetContext<'a> {
 
 impl SetExpression {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
-        unimplemented!()
+        match self {
+            &SetExpression::Values(ref rows) => {
+                let scalar_context = ScalarContext::new(context);
+                assert!(rows.len() >= 1);
+                let (component_types, _) =
+                    fold_err((Vec::new(), 0), rows[0].iter(), |(mut vec, count), expr| {
+                        let name = format!("_col{}", count);
+                        let expr_type = expr.infer_type(&scalar_context)?;
+
+                        match expr_type {
+                            ScalarType::Tuple(_) => {
+                                Err(Error::from("Expecting a scalar expression"))
+                            }
+                            ScalarType::Scalar { typ, is_null } => {
+                                vec.push(Attribute { name, typ, is_null });
+                                Ok((vec, count + 1))
+                            }
+                        }
+                    })?;
+
+                // TODO: Validate other rows
+                assert!(rows.len() <= 1);
+
+                Ok(RowType {
+                    attributes: component_types,
+                    primary_key: Vec::new(),
+                    order_by: Vec::new(),
+                })
+            }
+            &SetExpression::Query {
+                ref mode,
+                ref columns,
+                ref from,
+                ref where_expr,
+                ref group_by,
+            } => {
+                // evaluate from => yielding a ScalarContext
+
+                // evaluate where clause
+
+                // evaluate group_by clause
+
+                // evaluate columns
+
+                unimplemented!()
+            }
+            &SetExpression::Op {
+                ref op,
+                ref left,
+                ref right,
+            } => {
+                let left_type = left.infer_type(context);
+                let right_type = right.infer_type(context);
+
+                unimplemented!()
+            }
+        }
     }
 }
 
 impl TableExpression {
     fn infer_type(&self, context: &SetContext) -> Result<ScalarContext, Error> {
-        unimplemented!()
+        match self {
+            &TableExpression::Named {
+                ref name,
+                ref alias,
+            } => unimplemented!(),
+            &TableExpression::Select {
+                ref select,
+                ref alias,
+            } => unimplemented!(),
+            &TableExpression::Join {
+                ref left,
+                ref right,
+                ref op,
+                ref constraint,
+            } => unimplemented!(),
+        }
     }
 }
 
 impl SetSpecification {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
-        unimplemented!()
+        match self {
+            &SetSpecification::Select(ref select_statement) => unimplemented!(),
+            &SetSpecification::List(ref rows) => unimplemented!(),
+            &SetSpecification::Name(ref qualified_name) => unimplemented!(),
+        }
     }
 }
 
 impl SelectStatement {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
-        unimplemented!()
+        let mut scalar_context = ScalarContext::new(context);
+
+        // common table expression; validate type of each expression and build up a ScalarConext
+        for ref cte in &self.common {
+            let cte_type = cte.infer_type(context)?;
+            scalar_context.add_relation(cte.identifier.clone(), cte_type.attributes);
+        }
+
+        // set expression
+        let result_type = self.expr.infer_type(context)?;
+
+        // order by
+
+        // limit
+
+        Ok(result_type)
     }
 }
 
@@ -1239,5 +1339,11 @@ impl CommonTableExpression {
         // infer the type of the query
         // apply the optional column subsetting/reordering
         unimplemented!()
+
+        // query to determine row type
+
+        // column_names to rearrange row type
+
+        // identifier: not validated here
     }
 }
