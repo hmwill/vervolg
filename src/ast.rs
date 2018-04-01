@@ -555,6 +555,49 @@ impl ScalarType {
             _ => Err(Error::from("Incompatible types")),
         }
     }
+
+    fn unify(&self, other: &ScalarType) -> Result<ScalarType, Error> {
+        match (self, other) {
+            (
+                &ScalarType::Scalar {
+                    typ: typ1,
+                    is_null: null1,
+                },
+                &ScalarType::Scalar {
+                    typ: typ2,
+                    is_null: null2,
+                },
+            ) => {
+                if typ1 == typ2 {
+                    Ok(ScalarType::Scalar {
+                        typ: typ1.clone(),
+                        is_null: null1 | null2,
+                    })
+                } else {
+                    Err(Error::from("Incompatible types"))
+                }
+            }
+            (&ScalarType::Tuple(ref tuple1), &ScalarType::Tuple(ref tuple2)) => {
+                if tuple1.len() != tuple2.len() {
+                    return Err(Error::from(
+                        "Incompatible tuple types due to different lengths",
+                    ));
+                }
+
+                let components = fold_err(
+                    Vec::new(),
+                    tuple1.iter().zip(tuple2.iter()),
+                    |mut vec, (ref left, ref right)| {
+                        let item = left.unify(right)?;
+                        vec.push(item);
+                        Ok(vec)
+                    },
+                )?;
+                Ok(ScalarType::Tuple(components))
+            }
+            _ => Err(Error::from("Incompatible types")),
+        }
+    }
 }
 
 enum ScalarContextSymbol {
@@ -1226,7 +1269,7 @@ impl SetExpression {
             &SetExpression::Values(ref rows) => {
                 let scalar_context = ScalarContext::new(context);
                 assert!(rows.len() >= 1);
-                let (component_types, _) =
+                let (mut component_types, _) =
                     fold_err((Vec::new(), 0), rows[0].iter(), |(mut vec, count), expr| {
                         let name = format!("_col{}", count);
                         let expr_type = expr.infer_type(&scalar_context)?;
@@ -1242,8 +1285,35 @@ impl SetExpression {
                         }
                     })?;
 
-                // TODO: Validate other rows
-                assert!(rows.len() <= 1);
+                // Validate other rows and unify into the result type
+                let component_types =
+                    fold_err(component_types, (&rows[1..]).iter(), |mut types, vals| {
+                        fold_err(
+                            Vec::new(),
+                            types.iter().zip(vals.iter()),
+                            |mut vec, (attr, expr)| {
+                                let attribute_name = attr.name.clone();
+                                let attribute_type = ScalarType::Scalar {
+                                    typ: attr.typ,
+                                    is_null: attr.is_null,
+                                };
+                                let expr_type = expr.infer_type(&scalar_context)?;
+                                let component_type = attribute_type.unify(&expr_type)?;
+
+                                match component_type {
+                                    ScalarType::Scalar { typ, is_null } => {
+                                        vec.push(Attribute {
+                                            name: attribute_name,
+                                            typ,
+                                            is_null,
+                                        });
+                                        Ok(vec)
+                                    }
+                                    _ => panic!("Tuples are not valid components of rows"),
+                                }
+                            },
+                        )
+                    })?;
 
                 Ok(RowType {
                     attributes: component_types,
@@ -1259,31 +1329,110 @@ impl SetExpression {
                 ref group_by,
             } => {
                 // evaluate from => yielding a ScalarContext
+                let scalar_context = fold_err(
+                    ScalarContext::new(context),
+                    from.iter(),
+                    |context, ref table_expr| table_expr.infer_type(context),
+                )?;
 
                 // evaluate where clause
+                match where_expr {
+                    &Some(ref expr) => match expr.infer_type(&scalar_context)? {
+                        ScalarType::Scalar {
+                            typ: types::DataType::Logical,
+                            is_null,
+                        } => Ok(()),
+                        _ => Err(Error::from(
+                            "WHERE clause must evaluate to a BOOLEAN predicate",
+                        )),
+                    },
+                    &None => Ok(()),
+                };
 
-                // evaluate group_by clause
+                // evaluate group_by clause; just verify that those clauses refer to defined columns
+                match group_by {
+                    &None => (),
+                    &Some(GroupBy {
+                        ref groupings,
+                        having: ref opt_having,
+                    }) => {
+                        for ref clause in groupings {
+                            clause.infer_type(&scalar_context)?;
+                        }
+
+                        match opt_having {
+                            &Some(ref having) => match having.infer_type(&scalar_context)? {
+                                ScalarType::Scalar {
+                                    typ: types::DataType::Logical,
+                                    is_null,
+                                } => (),
+                                _ => {
+                                    return Err(Error::from(
+                                        "HAVING clause must evaluate to BOOLEAN value",
+                                    ))
+                                }
+                            },
+                            &None => (),
+                        }
+                    }
+                };
 
                 // evaluate columns
-
-                unimplemented!()
+                columns.infer_type(&scalar_context)
             }
             &SetExpression::Op {
                 ref op,
                 ref left,
                 ref right,
             } => {
-                let left_type = left.infer_type(context);
-                let right_type = right.infer_type(context);
+                let left_type = left.infer_type(context)?;
+                let right_type = right.infer_type(context)?;
 
-                unimplemented!()
+                // unify columns by position
+                let attributes = fold_err(
+                    Vec::new(),
+                    left_type
+                        .attributes
+                        .iter()
+                        .zip(right_type.attributes.iter()),
+                    |mut vec, (ref left_attr, ref right_attr)| {
+                        let name = left_attr.name.clone();
+                        let left_attr_type = ScalarType::Scalar {
+                            typ: left_attr.typ,
+                            is_null: left_attr.is_null,
+                        };
+                        let right_attr_type = ScalarType::Scalar {
+                            typ: right_attr.typ,
+                            is_null: right_attr.is_null,
+                        };
+                        match left_attr_type.unify(&right_attr_type)? {
+                            ScalarType::Scalar { typ, is_null } => {
+                                vec.push(Attribute { name, typ, is_null });
+                                Ok(vec)
+                            }
+                            _ => Err(Error::from("Embedded tuples are not allowed in row sets")),
+                        }
+                    },
+                )?;
+
+                Ok(RowType {
+                    attributes,
+                    primary_key: Vec::new(),
+                    order_by: Vec::new(),
+                })
             }
         }
     }
 }
 
+impl ResultColumns {
+    fn infer_type(&self, context: &ScalarContext) -> Result<RowType, Error> {
+        unimplemented!()
+    }
+}
+
 impl TableExpression {
-    fn infer_type(&self, context: &SetContext) -> Result<ScalarContext, Error> {
+    fn infer_type(&self, context: ScalarContext) -> Result<ScalarContext, Error> {
         match self {
             &TableExpression::Named {
                 ref name,
