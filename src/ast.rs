@@ -1329,10 +1329,14 @@ impl SetExpression {
                 ref group_by,
             } => {
                 // evaluate from => yielding a ScalarContext
-                let scalar_context = fold_err(
-                    ScalarContext::new(context),
+                let (scalar_context, attributes) = fold_err(
+                    (ScalarContext::new(context), Vec::new()),
                     from.iter(),
-                    |context, ref table_expr| table_expr.infer_type(context),
+                    |(context, mut attributes), ref table_expr| {
+                        let (context, mut new_attribiutes) = table_expr.infer_type(context)?;
+                        attributes.append(&mut new_attribiutes);
+                        Ok((context, attributes))
+                    },
                 )?;
 
                 // evaluate where clause
@@ -1340,13 +1344,15 @@ impl SetExpression {
                     &Some(ref expr) => match expr.infer_type(&scalar_context)? {
                         ScalarType::Scalar {
                             typ: types::DataType::Logical,
-                            is_null,
-                        } => Ok(()),
-                        _ => Err(Error::from(
-                            "WHERE clause must evaluate to a BOOLEAN predicate",
-                        )),
+                            is_null: _,
+                        } => (),
+                        _ => {
+                            return Err(Error::from(
+                                "WHERE clause must evaluate to a BOOLEAN predicate",
+                            ))
+                        }
                     },
-                    &None => Ok(()),
+                    &None => (),
                 };
 
                 // evaluate group_by clause; just verify that those clauses refer to defined columns
@@ -1377,8 +1383,8 @@ impl SetExpression {
                     }
                 };
 
-                // evaluate columns
-                columns.infer_type(&scalar_context)
+                // evaluate columns; the default columns should be passed into this function
+                columns.infer_type(&scalar_context, &attributes)
             }
             &SetExpression::Op {
                 ref op,
@@ -1425,29 +1431,167 @@ impl SetExpression {
     }
 }
 
+fn generate_column_name(
+    name: &str,
+    generated_names: &mut collections::HashMap<String, usize>,
+) -> String {
+    if generated_names.contains_key(name) {
+        let result = {
+            let counter = generated_names.entry(name.to_string()).or_insert(0usize);
+            *counter += 1;
+            format!("{}{}", name, *counter)
+        };
+
+        generated_names.insert(result.clone(), 0usize);
+        result
+    } else {
+        // first time we see the key
+        let result = name.to_string();
+        generated_names.insert(result.clone(), 0usize);
+        result
+    }
+}
+
 impl ResultColumns {
-    fn infer_type(&self, context: &ScalarContext) -> Result<RowType, Error> {
-        unimplemented!()
+    fn infer_type(
+        &self,
+        context: &ScalarContext,
+        attributes: &[Attribute],
+    ) -> Result<RowType, Error> {
+        let mut result_attributes = Vec::new();
+
+        // a map where we can track of names already generated
+        let mut generated_columns = collections::HashMap::new();
+
+        match self {
+            &ResultColumns::All => for attribute in attributes {
+                let result_name = generate_column_name(&attribute.name, &mut generated_columns);
+                result_attributes.push(Attribute {
+                    name: result_name,
+                    typ: attribute.typ.clone(),
+                    is_null: attribute.is_null,
+                });
+            },
+            &ResultColumns::List(ref column_list) => for column in column_list {
+                match &**column {
+                    &ResultColumn::AllFrom(ref name) => match context.symbols.get(name) {
+                        None => {
+                            return Err(Error::from(format!("Undefined collection named {}", name)))
+                        }
+                        Some(&ScalarContextSymbol::Relation(ref fields)) => {
+                            for (ref name, ref scalar) in fields {
+                                match *scalar {
+                                    &ScalarType::Scalar {
+                                        ref typ,
+                                        ref is_null,
+                                    } => {
+                                        let result_name =
+                                            generate_column_name(name, &mut generated_columns);
+                                        result_attributes.push(Attribute {
+                                            name: result_name,
+                                            typ: typ.clone(),
+                                            is_null: *is_null,
+                                        });
+                                    }
+                                    _ => panic!(
+                                        "Attributes of a schema object should be scalar values"
+                                    ),
+                                }
+                            }
+                        }
+                        Some(_) => {
+                            return Err(Error::from(format!(
+                                "Symbol {} needs to be a range variable",
+                                name
+                            )))
+                        }
+                    },
+                    &ResultColumn::Expr {
+                        expr: ref expr,
+                        rename: ref alias,
+                    } => match expr.infer_type(&context)? {
+                        ScalarType::Tuple(_) => {
+                            return Err(Error::from("Result column needs to be a scalar type"))
+                        }
+                        ScalarType::Scalar { typ, is_null } => {
+                            let name = match alias {
+                                &None => "col",
+                                &Some(ref name) => &name,
+                            };
+                            result_attributes.push(Attribute {
+                                name: generate_column_name(name, &mut generated_columns),
+                                typ,
+                                is_null,
+                            });
+                        }
+                    },
+                }
+            },
+        }
+
+        Ok(RowType {
+            attributes: result_attributes,
+            primary_key: Vec::new(),
+            order_by: Vec::new(),
+        })
     }
 }
 
 impl TableExpression {
-    fn infer_type(&self, context: ScalarContext) -> Result<ScalarContext, Error> {
+    // TODO: Result of type inference for a TableExpression should be a Vec<Attribute> alongside a ScalarContext
+    // The RowSet represents the columns that are visible in SELECT *; the ScalarContext provides
+    // look-up information for any other expression that is to be evaluated.
+    fn infer_type<'a>(
+        &self,
+        context: ScalarContext<'a>,
+    ) -> Result<(ScalarContext<'a>, Vec<Attribute>), Error> {
         match self {
             &TableExpression::Named {
                 ref name,
                 ref alias,
-            } => unimplemented!(),
+            } => {
+                // validate that the table name exists in the schema. If not => error
+                // If the alias is None, use the last component of the qualified table name
+                // as short-hand alias
+                // register the table and its columns in the context
+                let identifier = match alias {
+                    &Some(ref id) => id.clone(),
+                    &None => name.last().unwrap().clone(),
+                };
+
+                // find table in schema (make this a function)
+                unimplemented!();
+
+                // convert Vector of Column to Vector of Attribute (make this a function)
+                unimplemented!();
+
+                // add the columns to the scalar context
+                unimplemented!();
+
+                Ok((context, Vec::new()))
+            }
             &TableExpression::Select {
                 ref select,
                 ref alias,
-            } => unimplemented!(),
+            } => {
+                let row_type = select.infer_type(&context.set_context)?;
+
+                // how are the columns to be added?
+
+                unimplemented!()
+            }
             &TableExpression::Join {
                 ref left,
                 ref right,
                 ref op,
                 ref constraint,
-            } => unimplemented!(),
+            } => {
+                let (left_context, mut attributes) = left.infer_type(context)?;
+                let (result_context, mut right_attributes) = right.infer_type(left_context)?;
+
+                attributes.append(&mut right_attributes);
+                Ok((result_context, attributes))
+            }
         }
     }
 }
