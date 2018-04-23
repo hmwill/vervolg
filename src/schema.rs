@@ -135,6 +135,16 @@ pub enum SchemaObject {
     View(View),
 }
 
+impl SchemaObject {
+    pub fn row_set<'a>(&'a self) -> &'a RowSet {
+        match self {
+            &SchemaObject::File(ref file) => &file.rows,
+            &SchemaObject::Table(ref table) => &table.rows,
+            &SchemaObject::View(ref view) => &view.rows,
+        }
+    }
+}
+
 /// Description of a table within the database
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Table {

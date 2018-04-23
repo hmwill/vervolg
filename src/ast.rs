@@ -23,7 +23,10 @@
 use super::schema;
 use super::types;
 
+use std::borrow::Borrow;
+
 use std::collections;
+use std::fmt;
 use std::iter;
 use std::mem;
 use std::ops;
@@ -469,6 +472,7 @@ pub enum Literal {
 }
 
 /// Sort ordering direction
+#[derive(Debug, Clone)]
 pub enum OrderingDirection {
     /// Sort in ascending order
     Ascending,
@@ -615,14 +619,14 @@ enum ScalarContextSymbol {
 /// identifiers of attributes of rows within a relation.
 pub struct ScalarContext<'a> {
     // reference to an underlying SetContext
-    set_context: &'a SetContext<'a>,
+    set_context: &'a SetContext,
 
     // need a way to capture qualified attributes and attributes without qualification
     symbols: collections::HashMap<String, ScalarContextSymbol>,
 }
 
 impl<'a> ScalarContext<'a> {
-    fn new(set_context: &'a SetContext<'a>) -> Self {
+    fn new(set_context: &'a SetContext) -> Self {
         ScalarContext {
             set_context,
             symbols: collections::HashMap::new(),
@@ -1090,7 +1094,7 @@ impl Expression {
             /// Set membership test; set should evaluate to a row set with a single column
             &Expression::In { ref expr, ref set } => {
                 let expr_type = expr.infer_type(context)?;
-                let set_type = set.infer_type(&context.set_context)?;
+                let set_type = set.infer_type(&context)?;
 
                 if set_type.attributes.len() != 1 {
                     return Err(Error::from(
@@ -1207,32 +1211,109 @@ impl Literal {
     }
 }
 
+#[derive(Clone, Debug)]
 struct Attribute {
     name: String,
     typ: types::DataType,
     is_null: bool,
 }
 
+#[derive(Debug, Clone)]
 pub struct RowType {
     attributes: Vec<Attribute>,
     primary_key: Vec<String>,
     order_by: Vec<(String, OrderingDirection)>,
 }
 
+impl<T> From<T> for RowType
+where
+    T: Borrow<schema::RowSet>,
+{
+    fn from(row_set: T) -> Self {
+        let row_set_ref = row_set.borrow();
+
+        let attributes: Vec<Attribute> = row_set_ref
+            .columns
+            .iter()
+            .map(|column| Attribute {
+                name: column.name.clone(),
+                typ: column.data_type,
+                is_null: !column.not_null,
+            })
+            .collect();
+
+        let primary_key: Vec<String> = row_set_ref
+            .columns
+            .iter()
+            .filter(|column| column.primary_key)
+            .map(|ref column| column.name.clone())
+            .collect();
+
+        RowType {
+            attributes,
+            primary_key,
+            order_by: Vec::new(),
+        }
+    }
+}
+
+struct ObjectTypes(collections::BTreeMap<String, RowType>);
+struct Namespaces(collections::BTreeMap<String, ObjectTypes>);
+
+impl<T> From<T> for ObjectTypes
+where
+    T: Borrow<schema::Schema>,
+{
+    fn from(schema: T) -> Self {
+        let schema_ref = schema.borrow();
+
+        ObjectTypes(
+            schema_ref
+                .objects
+                .iter()
+                .map(|(name, ref schema_object)| {
+                    (name.clone(), RowType::from(schema_object.row_set()))
+                })
+                .collect(),
+        )
+    }
+}
+
+impl<T> From<T> for Namespaces
+where
+    T: Borrow<schema::Database>,
+{
+    fn from(database: T) -> Self {
+        let database_ref = database.borrow();
+
+        Namespaces(
+            database_ref
+                .schemata
+                .iter()
+                .map(|(name, schema)| (name.clone(), ObjectTypes::from(schema)))
+                .collect(),
+        )
+    }
+}
+
 /// A context of bindings used to evaluate a type; for set expressions, we are interested in bindings
 /// of identifiers for relations.
-pub struct SetContext<'a> {
-    // need a reference to a schema
-    schema: &'a schema::Schema,
+pub struct SetContext {
+    // need a reference to a database
+    namespaces: Namespaces,
+
+    // a default namespace name
+    default_namespace: String,
 
     // need a way to capture common table expression names
     table_expression: collections::BTreeMap<String, RowType>,
 }
 
-impl<'a> SetContext<'a> {
-    fn new(schema: &'a schema::Schema) -> Self {
+impl SetContext {
+    fn new(database: &schema::Database, default_schema: String) -> Self {
         SetContext {
-            schema: schema,
+            namespaces: Namespaces::from(database),
+            default_namespace: default_schema,
             table_expression: collections::BTreeMap::new(),
         }
     }
@@ -1247,12 +1328,74 @@ impl<'a> SetContext<'a> {
         }
     }
 
-    // Convenience function to construct SetContext from Schema and iterator over common table expressions
-    fn initialize<'c, I>(schema: &'a schema::Schema, cte: I) -> Result<Self, Error>
+    fn resolve_table_name<'b, T: AsRef<str>>(
+        &'b self,
+        qualified_name: &[T],
+    ) -> Result<&'b RowType, Error>
+    where
+        T: fmt::Display,
+    {
+        match qualified_name.len() {
+            1usize => {
+                // Check for CTE
+                match self.table_expression.get(qualified_name[0].as_ref()) {
+                    Some(ref row_type) => return Ok(row_type),
+                    None => (),
+                }
+
+                // look for the table name within the default schema
+                match self.namespaces.0.get(&self.default_namespace) {
+                    None => panic!("Default namespace not present in database"),
+                    Some(ref namespace) => namespace.0.get(qualified_name[0].as_ref()).ok_or(
+                        Error::from(format!(
+                            "Table name {} not found in schema",
+                            qualified_name[0]
+                        )),
+                    ),
+                }
+            }
+            2usize => {
+                // Verify that the first component is not referencing a CTE
+                match self.table_expression.get(qualified_name[0].as_ref()) {
+                    Some(ref row_type) => {
+                        return Err(Error::from(
+                            "Schema name is hidden by common table expression",
+                        ))
+                    }
+                    None => (),
+                }
+
+                // resolve a qualfied table name
+                // look for the table name within the default schema
+                match self.namespaces.0.get(qualified_name[0].as_ref()) {
+                    None => Err(Error::from(format!(
+                        "Namespace {} not present in database",
+                        qualified_name[0]
+                    ))),
+                    Some(ref namespace) => namespace.0.get(qualified_name[1].as_ref()).ok_or(
+                        Error::from(format!(
+                            "Table name {} not found in schema",
+                            qualified_name[1]
+                        )),
+                    ),
+                }
+            }
+            _ => Err(Error::from(
+                "Table name references should have 1 or 2 components",
+            )),
+        }
+    }
+
+    // Convenience function to construct SetContext from Database and iterator over common table expressions
+    fn initialize<'c, I>(
+        database: &schema::Database,
+        default_schema: String,
+        cte: I,
+    ) -> Result<Self, Error>
     where
         I: iter::IntoIterator<Item = &'c CommonTableExpression>,
     {
-        let mut result = Self::new(schema);
+        let mut result = Self::new(database, default_schema);
 
         for item in cte {
             let row_type = item.infer_type(&result)?;
@@ -1538,12 +1681,11 @@ impl ResultColumns {
 }
 
 impl TableExpression {
-    // TODO: Result of type inference for a TableExpression should be a Vec<Attribute> alongside a ScalarContext
     // The RowSet represents the columns that are visible in SELECT *; the ScalarContext provides
     // look-up information for any other expression that is to be evaluated.
     fn infer_type<'a>(
         &self,
-        context: ScalarContext<'a>,
+        mut context: ScalarContext<'a>,
     ) -> Result<(ScalarContext<'a>, Vec<Attribute>), Error> {
         match self {
             &TableExpression::Named {
@@ -1551,34 +1693,27 @@ impl TableExpression {
                 ref alias,
             } => {
                 // validate that the table name exists in the schema. If not => error
+                let row_type = context.set_context.resolve_table_name(name)?;
+
                 // If the alias is None, use the last component of the qualified table name
                 // as short-hand alias
-                // register the table and its columns in the context
                 let identifier = match alias {
                     &Some(ref id) => id.clone(),
                     &None => name.last().unwrap().clone(),
                 };
 
-                // find table in schema (make this a function)
-                unimplemented!();
+                // register the table and its columns in the context
+                context.add_relation(identifier, row_type.attributes.clone());
 
-                // convert Vector of Column to Vector of Attribute (make this a function)
-                unimplemented!();
-
-                // add the columns to the scalar context
-                unimplemented!();
-
-                Ok((context, Vec::new()))
+                // return the expanded context, as well as all the attributes as default result column list
+                Ok((context, row_type.attributes.clone()))
             }
             &TableExpression::Select {
                 ref select,
                 ref alias,
             } => {
                 let row_type = select.infer_type(&context.set_context)?;
-
-                // how are the columns to be added?
-
-                unimplemented!()
+                Ok((context, row_type.attributes))
             }
             &TableExpression::Join {
                 ref left,
@@ -1597,11 +1732,42 @@ impl TableExpression {
 }
 
 impl SetSpecification {
-    fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
+    fn infer_type(&self, context: &ScalarContext) -> Result<RowType, Error> {
         match self {
-            &SetSpecification::Select(ref select_statement) => unimplemented!(),
-            &SetSpecification::List(ref rows) => unimplemented!(),
-            &SetSpecification::Name(ref qualified_name) => unimplemented!(),
+            &SetSpecification::Select(ref select_statement) => {
+                select_statement.infer_type(&context.set_context)
+            }
+            &SetSpecification::Name(ref qualified_name) => {
+                let row_type = context
+                    .set_context
+                    .resolve_table_name(qualified_name.as_ref())?;
+                Ok(row_type.clone())
+            }
+            &SetSpecification::List(ref values) => {
+                let mut iter = values.iter();
+                let initial_type = iter.next().unwrap().infer_type(&context);
+                let value_type = iter.fold(initial_type, |typ, expr| {
+                    let expr_type = expr.infer_type(&context)?;
+                    typ?.unify(&expr_type)
+                })?;
+
+                match value_type {
+                    ScalarType::Scalar { typ, is_null } => Ok(RowType {
+                        attributes: vec![
+                            Attribute {
+                                name: "_col0".to_string(),
+                                typ,
+                                is_null,
+                            },
+                        ],
+                        primary_key: Vec::new(),
+                        order_by: Vec::new(),
+                    }),
+                    _ => Err(Error::from(
+                        "Expressions for set specification must be of scalar type",
+                    )),
+                }
+            }
         }
     }
 }
@@ -1620,23 +1786,96 @@ impl SelectStatement {
         let result_type = self.expr.infer_type(context)?;
 
         // order by
+        for ref iter in &self.order_by {
+            iter.validate_type(&scalar_context)?;
+        }
 
         // limit
+        if let &Some(ref limit) = &self.limit {
+            limit.validate_type(&scalar_context.set_context)?;
+        }
 
         Ok(result_type)
     }
 }
 
+impl Ordering {
+    fn validate_type(&self, context: &ScalarContext) -> Result<(), Error> {
+        let typ = self.expr.infer_type(context)?;
+
+        match typ {
+            ScalarType::Scalar { typ: _, is_null: _ } => Ok(()),
+            _ => Err(Error::from(
+                "Expressions in ORDER BY clause need to be of scalar type",
+            )),
+        }
+    }
+}
+
+impl Limit {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        let scalar_context = ScalarContext::new(context);
+
+        match self.number_rows.infer_type(&scalar_context)? {
+            ScalarType::Scalar {
+                typ: types::DataType::Numeric,
+                is_null: false,
+            } => (),
+            _ => {
+                return Err(Error::from(
+                    "LIMIT expression must evaluate to non-null numeric value",
+                ))
+            }
+        }
+
+        if let &Some(ref offset_value) = &self.offset_value {
+            match offset_value.infer_type(&scalar_context)? {
+                ScalarType::Scalar {
+                    typ: types::DataType::Numeric,
+                    is_null: false,
+                } => (),
+                _ => {
+                    return Err(Error::from(
+                        "OFFSET expression must evaluate to non-null numeric value",
+                    ))
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl CommonTableExpression {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
-        // infer the type of the query
-        // apply the optional column subsetting/reordering
-        unimplemented!()
-
         // query to determine row type
+        let row_type = self.query.infer_type(context)?;
 
         // column_names to rearrange row type
+        match &self.column_names {
+            &None => Ok(row_type),
+            &Some(ref column_names) => {
+                let mut attributes = Vec::new();
 
-        // identifier: not validated here
+                for column_name in column_names {
+                    let index = row_type
+                        .attributes
+                        .iter()
+                        .position(|column| *column.name == *column_name)
+                        .ok_or(Error::from(format!("Column {} not found", column_name)))?;
+                    attributes.push(Attribute {
+                        name: column_name.clone(),
+                        typ: row_type.attributes[index].typ.clone(),
+                        is_null: row_type.attributes[index].is_null,
+                    })
+                }
+
+                Ok(RowType {
+                    attributes,
+                    primary_key: row_type.primary_key,
+                    order_by: row_type.order_by,
+                })
+            }
+        }
     }
 }
