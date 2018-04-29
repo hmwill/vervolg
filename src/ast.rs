@@ -122,11 +122,8 @@ pub struct UpdateStatement {
 
 /// Rerpresentation of an attach statement
 pub struct AttachStatement {
-    /// an optional schema name within which we are defining a new table mapped to an external file
-    pub schema: Option<String>,
-
     /// the table name within the previous (or default) schema
-    pub name: String,
+    pub qualified_name: Vec<String>,
 
     /// the file system path of the external file to be attached as table
     pub path: String,
@@ -134,22 +131,62 @@ pub struct AttachStatement {
 
 impl AttachStatement {
     pub fn new(schema: Option<String>, name: String, path: String) -> AttachStatement {
-        AttachStatement { schema, name, path }
+        let mut qualified_name = Vec::new();
+
+        if schema.is_some() {
+            qualified_name.push(schema.unwrap())
+        }
+
+        qualified_name.push(name);
+
+        AttachStatement {
+            qualified_name,
+            path,
+        }
+    }
+
+    pub fn schema_name(&self) -> Option<&str> {
+        match self.qualified_name.len() {
+            2 => Some(&self.qualified_name[0]),
+            1 => None,
+            _ => panic!(),
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.qualified_name.last().unwrap()
     }
 }
 
 /// Representation of a describe statememnt
 pub struct DescribeStatement {
-    /// an optional schema of the object to describe
-    pub schema: Option<String>,
-
     /// the name of the object to describe
-    pub name: String,
+    pub qualified_name: Vec<String>,
 }
 
 impl DescribeStatement {
     pub fn new(schema: Option<String>, name: String) -> DescribeStatement {
-        DescribeStatement { schema, name }
+        let mut qualified_name = Vec::new();
+
+        if schema.is_some() {
+            qualified_name.push(schema.unwrap())
+        }
+
+        qualified_name.push(name);
+
+        DescribeStatement { qualified_name }
+    }
+
+    pub fn schema_name(&self) -> Option<&str> {
+        match self.qualified_name.len() {
+            2 => Some(&self.qualified_name[0]),
+            1 => None,
+            _ => panic!(),
+        }
+    }
+
+    pub fn table_name(&self) -> &str {
+        &self.qualified_name.last().unwrap()
     }
 }
 
@@ -1218,6 +1255,12 @@ struct Attribute {
     is_null: bool,
 }
 
+impl Attribute {
+    fn is_assignable_to(&self, other: &Attribute) -> bool {
+        self.typ == other.typ && (other.is_null || !self.is_null)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RowType {
     attributes: Vec<Attribute>,
@@ -1772,6 +1815,50 @@ impl SetSpecification {
     }
 }
 
+impl SqlStatement {
+    pub fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        match self {
+            &SqlStatement::Statement(ref statement) => {
+                let _ = statement.validate_type(context)?;
+                Ok(())
+            }
+            &SqlStatement::ExplainQueryPlan(ref statement) => {
+                let _ = statement.validate_type(context)?;
+                Ok(())
+            }
+            &SqlStatement::Attach(ref attach) => attach.validate_type(context),
+            &SqlStatement::Describe(ref describe) => describe.validate_type(context),
+        }
+    }
+}
+
+impl AttachStatement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl DescribeStatement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        let _ = context.resolve_table_name(&self.qualified_name)?;
+        Ok(())
+    }
+}
+
+impl Statement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        match self {
+            &Statement::Select(ref select) => {
+                let _ = select.infer_type(context)?;
+                Ok(())
+            }
+            &Statement::Insert(ref insert) => insert.validate_type(context),
+            &Statement::Update(ref update) => update.validate_type(context),
+            &Statement::Delete(ref delete) => delete.validate_type(context),
+        }
+    }
+}
+
 impl SelectStatement {
     fn infer_type(&self, context: &SetContext) -> Result<RowType, Error> {
         let mut scalar_context = ScalarContext::new(context);
@@ -1796,6 +1883,112 @@ impl SelectStatement {
         }
 
         Ok(result_type)
+    }
+}
+
+impl InsertStatement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        let row_type = context.resolve_table_name(&self.table_name)?;
+        let mut row_type_map: collections::BTreeMap<String, (types::DataType, bool)> = row_type
+            .attributes
+            .iter()
+            .map(|attribute| (attribute.name.clone(), (attribute.typ, attribute.is_null)))
+            .collect();
+
+        let values_type = self.source.infer_type(&context)?;
+
+        match &self.columns {
+            &None => {
+                // iterate over the value attriute types, and verify that the
+                // associated type can be assigned to the corresponding column of the table row
+                for ref attribute in &values_type.attributes {
+                    match &row_type_map.get(&attribute.name) {
+                        &None => return Err(Error::from(format!("Column '{}' not defined in table '{:?}'", &attribute.name, &self.table_name))),
+                        &Some(&(ref typ, ref is_null)) => {
+                            if *typ != attribute.typ ||
+                                (!*is_null && attribute.is_null) {
+                                    return Err(Error::from(format!("Cannot assign value '{}' to column '{}'",
+                                        attribute.name, attribute.name)))
+                                }
+                        }
+                    }
+
+                    row_type_map.remove(&attribute.name);
+                }
+            }
+            &Some(ref columns) => {
+                // vaidate that number of column align with values provided
+                if columns.len() != values_type.attributes.len() {
+                    return Err(Error::from(
+                        "Length mismatch between column name list and value set provided",
+                    ));
+                }
+
+                // iterate over the value attriute types, and verify that the
+                // associated type can be assigned to the corresponding column of the table row
+                for (ref attribute, name) in values_type.attributes.iter().zip(columns.iter()) {
+                    match &row_type_map.get(name) {
+                        &None => return Err(Error::from(format!("Column '{}' not defined in table '{:?}'", &name, &self.table_name))),
+                        &Some(&(ref typ, ref is_null)) => {
+                            if *typ != attribute.typ ||
+                                (!*is_null && attribute.is_null) {
+                                    return Err(Error::from(format!("Cannot assign value '{}' to column '{}'",
+                                        attribute.name, name)))
+                                }
+                        }
+                    }
+
+                    row_type_map.remove(name);
+                }
+            }
+        }
+
+        // also need to verify that we have provided values for all non-null columns of the table
+        for (ref name, &(_, ref is_null)) in &row_type_map {
+            if !is_null {
+                return Err(Error::from(format!("Missing value for non-null column '{}'", name)))
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl UpdateStatement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        unimplemented!()
+    }
+}
+
+impl DeleteStatement {
+    fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
+        // validate that the table name exists in the schema. If not => error
+        let row_type = context.resolve_table_name(&self.table_name)?;
+
+        // If the alias is None, use the last component of the qualified table name
+        // as short-hand alias
+        let identifier = self.table_name.last().unwrap().clone();
+
+        // register the table and its columns in the context
+        let mut scalar_context = ScalarContext::new(&context);
+        scalar_context.add_relation(identifier, row_type.attributes.clone());
+
+        match &self.where_expr {
+            &Some(ref expr) => match expr.infer_type(&scalar_context)? {
+                ScalarType::Scalar {
+                    typ: types::DataType::Logical,
+                    is_null: _,
+                } => (),
+                _ => {
+                    return Err(Error::from(
+                        "WHERE clause must evaluate to a BOOLEAN predicate",
+                    ))
+                }
+            },
+            &None => (),
+        };
+
+        Ok(())
     }
 }
 

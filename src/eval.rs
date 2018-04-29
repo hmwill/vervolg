@@ -495,8 +495,8 @@ impl<'a> Evaluator<'a> {
 
     fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {
         self.session.database.attach_file(
-            info.schema.as_ref().unwrap_or(&self.session.default_schema),
-            &info.name,
+            info.schema_name().unwrap_or(&self.session.default_schema),
+            info.table_name(),
             &info.path,
         )?;
         Ok(Box::new(EmptyRowSet::new()))
@@ -504,8 +504,8 @@ impl<'a> Evaluator<'a> {
 
     fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<RowSet>, Error> {
         let rowset = self.session.database.describe(
-            info.schema.as_ref().unwrap_or(&self.session.default_schema),
-            &info.name,
+            info.schema_name().unwrap_or(&self.session.default_schema),
+            info.table_name(),
         )?;
         Ok(Box::new(MetaDataRowSet::new(rowset)))
     }
