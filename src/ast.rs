@@ -29,7 +29,6 @@ use std::collections;
 use std::fmt;
 use std::iter;
 use std::mem;
-use std::ops;
 
 /// The error value; currently this is just a string
 pub type Error = super::Error;
@@ -116,7 +115,7 @@ pub struct UpdateStatement {
     /// assignments providing new values for table columns
     pub assignments: Vec<Assignment>,
 
-    /// a predicate restricting the set of columns to which the update should be applied
+    /// a predicate restricting the set of rows to which the update should be applied
     pub where_expr: Option<Box<Expression>>,
 }
 
@@ -1746,7 +1745,7 @@ impl TableExpression {
                 };
 
                 // register the table and its columns in the context
-                context.add_relation(identifier, row_type.attributes.clone());
+                context.add_relation(identifier, row_type.attributes.clone())?;
 
                 // return the expanded context, as well as all the attributes as default result column list
                 Ok((context, row_type.attributes.clone()))
@@ -1866,7 +1865,7 @@ impl SelectStatement {
         // common table expression; validate type of each expression and build up a ScalarConext
         for ref cte in &self.common {
             let cte_type = cte.infer_type(context)?;
-            scalar_context.add_relation(cte.identifier.clone(), cte_type.attributes);
+            scalar_context.add_relation(cte.identifier.clone(), cte_type.attributes)?;
         }
 
         // set expression
@@ -1956,7 +1955,60 @@ impl InsertStatement {
 
 impl UpdateStatement {
     fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
-        unimplemented!()
+        // validate that the table name exists in the schema. If not => error
+        let row_type = context.resolve_table_name(&self.table_name)?;
+        let row_type_map: collections::BTreeMap<String, (types::DataType, bool)> = row_type
+            .attributes
+            .iter()
+            .map(|attribute| (attribute.name.clone(), (attribute.typ, attribute.is_null)))
+            .collect();
+        
+        let identifier = self.table_name.last().unwrap().clone();
+        let mut scalar_context = ScalarContext::new(&context);
+
+        scalar_context.add_relation(identifier, row_type.attributes.clone())?;
+        let mut assigned_columns = collections::HashSet::new();
+
+        for assignment in &self.assignments {
+            match assignment.expr.infer_type(&scalar_context)? {
+                ScalarType::Scalar { typ, is_null } => {
+                    for column in &assignment.columns {
+                        if assigned_columns.contains(column) {
+                            return Err(Error::from(format!("Duplicate assignment of column '{}'", column)))
+                        }
+
+                        match row_type_map.get(column) {
+                            None => return Err(Error::from(format!("Assignment to undefined column '{}'", column))),
+                            Some(&(ref column_type, ref colummn_is_null)) => {
+                                if *column_type != typ || (is_null && !colummn_is_null) {
+                                    return Err(Error::from(format!("Assignment incompatible value to column '{}'", column)))
+                                }
+                            }
+                        }
+
+                        assigned_columns.insert(column);
+                    }
+                },
+                _ => return Err(Error::from("Assigned value needs to be of scalar type"))
+            }
+        }
+
+        match &self.where_expr {
+            &Some(ref expr) => match expr.infer_type(&scalar_context)? {
+                ScalarType::Scalar {
+                    typ: types::DataType::Logical,
+                    is_null: _,
+                } => (),
+                _ => {
+                    return Err(Error::from(
+                        "WHERE clause must evaluate to a BOOLEAN predicate",
+                    ))
+                }
+            },
+            &None => (),
+        };
+
+        Ok(())
     }
 }
 
@@ -1964,14 +2016,9 @@ impl DeleteStatement {
     fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
         // validate that the table name exists in the schema. If not => error
         let row_type = context.resolve_table_name(&self.table_name)?;
-
-        // If the alias is None, use the last component of the qualified table name
-        // as short-hand alias
         let identifier = self.table_name.last().unwrap().clone();
-
-        // register the table and its columns in the context
         let mut scalar_context = ScalarContext::new(&context);
-        scalar_context.add_relation(identifier, row_type.attributes.clone());
+        scalar_context.add_relation(identifier, row_type.attributes.clone())?;
 
         match &self.where_expr {
             &Some(ref expr) => match expr.infer_type(&scalar_context)? {
