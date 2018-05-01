@@ -2119,3 +2119,6 @@ impl CommonTableExpression {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -24,6 +24,115 @@ use super::ast;
 
 grammar;
 
+// Lexer specification, with the primary purpose of making language keywords case insensitive
+match {
+    r"(?i)all" => "ALL",
+    r"(?i)and" => "AND",
+    r"(?i)as" => "AS",
+    r"(?i)asc" => "ASC",
+    r"(?i)attach" => "ATTACH",
+
+    r"(?i)between" => "BETWEEN",
+    r"(?i)by" => "BY",
+
+    r"(?i)case" => "CASE",
+    r"(?i)collate" => "COLLATE",
+    r"(?i)cross" => "CROSS",
+    r"(?i)current_date" => "CURRENT_DATE",
+    r"(?i)current_time" => "CURRENT_TIME",
+    r"(?i)current_timestamp" => "CURRENT_TIMESTAMP",
+    
+    r"(?i)date" => "DATE",
+    r"(?i)delete" => "DELETE",
+    r"(?i)desc" => "DESC",
+    r"(?i)describe" => "DESCRIBE",
+    r"(?i)distinct" => "DISTINCT",
+    
+    r"(?i)else" => "ELSE",
+    r"(?i)end" => "END",
+    r"(?i)explain" => "EXPLAIN",
+    r"(?i)except" => "EXCEPT",
+    
+    r"(?i)file" => "FILE",
+    r"(?i)from" => "FROM",
+    r"(?i)full" => "FULL",
+
+    r"(?i)group" => "GROUP",
+
+    r"(?i)having" => "HAVING",
+
+    r"(?i)in" => "IN",
+    r"(?i)inner" => "INNER",
+    r"(?i)insert" => "INSERT",
+    r"(?i)intersect" => "INTERSECT",
+    r"(?i)into" => "INTO",
+    r"(?i)is" => "IS",
+    r"(?i)isnull" => "ISNULL",
+
+    r"(?i)join" => "JOIN",
+    
+    r"(?i)left" => "LEFT",    
+    r"(?i)limit" => "LIMIT",
+    r"(?i)like" => "LIKE",
+
+    r"(?i)natural" => "NATURAL",
+    r"(?i)not" => "NOT",
+    r"(?i)notnull" => "NOTNULL",
+    r"(?i)null" => "NULL",
+    
+    r"(?i)offset" => "OFFSET",
+    r"(?i)on" => "ON",
+    r"(?i)or" => "OR",
+    r"(?i)order" => "ORDER",
+    r"(?i)outer" => "OUTER",
+    
+    r"(?i)plan" => "PLAN",
+
+    r"(?i)query" => "QUERY",
+
+    r"(?i)right" => "RIGHT",
+
+    r"(?i)select" => "SELECT",
+    r"(?i)set" => "SET",
+
+    r"(?i)table" => "TABLE",
+    r"(?i)then" => "THEN",
+    r"(?i)time" => "TIME",
+    r"(?i)timestamp" => "TIMESTAMP",
+    
+    r"(?i)update" => "UPDATE",
+    r"(?i)union" => "UNION",
+    r"(?i)using" => "USING",
+
+    r"(?i)values" => "VALUES",
+
+    r"(?i)when" => "WHEN",
+    r"(?i)where" => "WHERE",
+    r"(?i)with" => "WITH",
+
+    "," => ",",
+    "." => ".",
+    "(" => "(",
+    ")" => ")",
+    "*" => "*",
+    "/" => "/",
+    "+" => "+",
+    "-" => "-",
+    "=" => "=",
+    "!=" => "!=",
+    "<" => "<",
+    "<=" => "<=",
+    ">" => ">",
+    ">=" => ">=",
+    "||" => "||"
+} else {
+    r"[A-Za-z_][A-Za-z0-9_]*" => ID,
+    r"[0-9]+(\.[0-9]*)?(E[+-]?[0-9]+)?" => NUMERIC_LIT_1,
+    r"\.[0-9]+(E[+-]?[0-9]+)?" => NUMERIC_LIT_2,
+    r"0x[0-9A-Fa-f]+" => HEX_LIT,
+    r"'[^[[:cntrl:]]']*'" => STRING_LIT
+}
+
 pub SqlStatement: ast::SqlStatement = {
     <statement: Statement> => ast::SqlStatement::Statement(statement),
     "EXPLAIN" ("QUERY" "PLAN")? <statement: Statement> => ast::SqlStatement::ExplainQueryPlan(statement),
@@ -435,12 +544,12 @@ LiteralValue: ast::Literal = {
     "TIMESTAMP" <s:StringLiteral> => ast::Literal::TimestampLiteral(s),
 };
 
-Identifier: String = r"[A-Za-z_][A-Za-z0-9_]*" => <>.to_string();
+Identifier: String = ID => <>.to_string();
 
 NumericLiteral: String = {
-    r"[0-9]+(\.[0-9]*)?(E[+-]?[0-9]+)?" => <>.to_string(),
-    r"\.[0-9]+(E[+-]?[0-9]+)?" => <>.to_string(),
-    r"0x[0-9A-Fa-f]+" => <>.to_string(),
+    NUMERIC_LIT_1 => <>.to_string(),
+    NUMERIC_LIT_2 => <>.to_string(),
+    HEX_LIT => <>.to_string(),
 };
 
-StringLiteral: String = r"'[^[[:cntrl:]]']*'" => <>[1..<>.len() - 1].to_string();
+StringLiteral: String = STRING_LIT => <>[1..<>.len() - 1].to_string();
