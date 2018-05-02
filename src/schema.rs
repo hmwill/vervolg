@@ -29,11 +29,12 @@ use csv;
 
 use super::Error;
 use super::types;
+use super::symbols;
 
 /// the logical database, which is a collection of schemata
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Database {
-    pub schemata: BTreeMap<String, Schema>,
+    pub schemata: BTreeMap<symbols::Name, Schema>,
 }
 
 impl Database {
@@ -43,7 +44,7 @@ impl Database {
         }
     }
 
-    pub fn create_schema(&mut self, schema_name: &str) -> Result<(), Error> {
+    pub fn create_schema(&mut self, schema_name: &symbols::Name) -> Result<(), Error> {
         if self.schemata.contains_key(schema_name) {
             return Err(Error::from(format!(
                 "Schema '{}' is already defined",
@@ -52,15 +53,15 @@ impl Database {
         }
 
         let old_value = self.schemata
-            .insert(String::from(schema_name), Schema::new(schema_name));
+            .insert(schema_name.clone(), Schema::new(schema_name.clone()));
         assert!(old_value.is_none());
         Ok(())
     }
 
     pub fn attach_file(
         &mut self,
-        schema_name: &str,
-        object_name: &str,
+        schema_name: &symbols::Name,
+        object_name: &symbols::Name,
         path: &str,
     ) -> Result<(), Error> {
         // validate that the schema name is valid
@@ -80,11 +81,11 @@ impl Database {
         let file_object = File::from_data_file(object_name, path)?;
         schema
             .objects
-            .insert(String::from(object_name), SchemaObject::File(file_object));
+            .insert(object_name.clone(), SchemaObject::File(file_object));
         Ok(())
     }
 
-    pub fn describe(&self, schema_name: &str, object_name: &str) -> Result<RowSet, Error> {
+    pub fn describe(&self, schema_name: &symbols::Name, object_name: &symbols::Name) -> Result<RowSet, Error> {
         // validate that the schema name is valid
         let schema = self.schemata
             .get(schema_name)
@@ -107,16 +108,16 @@ impl Database {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Schema {
     /// the schema name
-    pub name: String,
+    pub name: symbols::Name,
 
     /// the collection of tables making up the database
-    pub objects: BTreeMap<String, SchemaObject>,
+    pub objects: BTreeMap<symbols::Name, SchemaObject>,
 }
 
 impl Schema {
-    fn new(name: &str) -> Self {
+    fn new(name: symbols::Name) -> Self {
         Schema {
-            name: String::from(name),
+            name: name,
             objects: BTreeMap::new(),
         }
     }
@@ -149,20 +150,20 @@ impl SchemaObject {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Table {
     /// the name of the table
-    pub name: String,
+    pub name: symbols::Name,
 
     /// description of the data rows that are stored in this table
     pub rows: RowSet,
 
     /// the names of the columns that are part of the primary key
-    pub primary_key: Vec<String>,
+    pub primary_key: Vec<symbols::Name>,
 }
 
 /// An external CSV data file that can be accessed by the engine.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct File {
     /// the name of the schema object
-    pub name: String,
+    pub name: symbols::Name,
 
     /// description of the data rows that are stored in this data file
     pub rows: RowSet,
@@ -172,7 +173,7 @@ pub struct File {
 }
 
 impl File {
-    fn from_data_file(object_name: &str, path: &str) -> Result<File, Error> {
+    fn from_data_file(object_name: &symbols::Name, path: &str) -> Result<File, Error> {
         // ensure that the path refers to an existing file; determine column set
         let reader_result = csv::Reader::from_path(path);
 
@@ -197,7 +198,7 @@ impl File {
             .unwrap()
             .iter()
             .map(|c| Column {
-                name: String::from(c),
+                name: symbols::Name::from(c),
                 not_null: false,
                 primary_key: false,
                 data_type: types::DataType::Generic,
@@ -206,7 +207,7 @@ impl File {
 
         // create a schema object and register it
         Ok(File {
-            name: String::from(object_name),
+            name: object_name.clone(),
             rows: RowSet { columns },
             path: PathBuf::from(path),
         })
@@ -232,7 +233,7 @@ pub struct CsvOptions {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct View {
     /// the name of the view
-    pub name: String,
+    pub name: symbols::Name,
 
     /// description of the data rows that are stored in this table
     pub rows: RowSet,
@@ -257,25 +258,25 @@ impl RowSet {
         RowSet {
             columns: vec![
                 Column {
-                    name: String::from("name"),
+                    name: symbols::Name::from("name"),
                     not_null: true,
                     primary_key: true,
                     data_type: types::DataType::Varchar,
                 },
                 Column {
-                    name: String::from("not_null"),
+                    name: symbols::Name::from("not_null"),
                     not_null: true,
                     primary_key: false,
                     data_type: types::DataType::Numeric,
                 },
                 Column {
-                    name: String::from("primary_key"),
+                    name: symbols::Name::from("primary_key"),
                     not_null: true,
                     primary_key: false,
                     data_type: types::DataType::Numeric,
                 },
                 Column {
-                    name: String::from("datatype"),
+                    name: symbols::Name::from("datatype"),
                     not_null: true,
                     primary_key: false,
                     data_type: types::DataType::Varchar,
@@ -289,7 +290,7 @@ impl RowSet {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Column {
     /// the name of the column
-    pub name: String,
+    pub name: symbols::Name,
 
     /// if true, the value is required
     pub not_null: bool,

@@ -107,7 +107,7 @@ impl RowSet for MetaDataRowSet {
                 let result = &mut self.result_buffer;
                 result.clear();
 
-                result.push_field(&column.name);
+                result.push_field(column.name.as_str());
                 result.push_field(if column.not_null { "1" } else { "0" });
                 result.push_field(if column.primary_key { "1" } else { "0" });
                 result.push_field(&format!("{}", column.data_type));

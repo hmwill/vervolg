@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use super::ast;
+use super::symbols;
 
 grammar;
 
@@ -152,7 +153,7 @@ InsertStatement: ast::InsertStatement = {
         ast::InsertStatement { table_name, columns, source }, 
 };
 
-ColumnNameList: Vec<String> = {
+ColumnNameList: Vec<symbols::Name> = {
     "(" <ids:IdentifierList> ")" => ids,
 };
 
@@ -268,7 +269,7 @@ ResultColumn: Box<ast::ResultColumn> = {
     <name:Identifier> "." "*" => Box::new(ast::ResultColumn::AllFrom(name)),
 };
 
-QualifiedIdentifier: Vec<String> = {
+QualifiedIdentifier: Vec<symbols::Name> = {
     Identifier => vec![<>],
     <i1:Identifier> "." <i2:Identifier> => vec![i1, i2],
     <i1:Identifier> "." <i2:Identifier> "." <i3:Identifier> => vec![i1, i2, i3],
@@ -297,7 +298,7 @@ TableOrSubQuery: Box<ast::TableExpression> = {
     "(" <expr:TableExpression> ")" => expr,
 };
 
-TableAlias: String = {
+TableAlias: symbols::Name = {
     "AS"? <name:Identifier> => name,
 };
 
@@ -319,7 +320,7 @@ JoinConstraint: ast::JoinConstraint = {
     "USING" "(" <ids:IdentifierList> ")" => ast::JoinConstraint::Columns(ids),
 };
 
-IdentifierList: Vec<String> = {
+IdentifierList: Vec<symbols::Name> = {
     Identifier => vec![<>],
     <ids:IdentifierList> "," <id:Identifier> => ast::append(ids, id),
 };
@@ -348,7 +349,7 @@ OrderingTerm: ast::Ordering = {
         ast::Ordering { expr, collation, direction },
 };
 
-OrderingCollation: String = {
+OrderingCollation: symbols::Name = {
     "COLLATE" <name:Identifier> => name,
 };
 
@@ -375,7 +376,7 @@ DescribeStatement: ast::DescribeStatement = {
         ast::DescribeStatement::new(schema, name),
 };
 
-SchemaName: String = {
+SchemaName: symbols::Name = {
     <schema: Identifier> "." => schema,
 };
 
@@ -544,7 +545,7 @@ LiteralValue: ast::Literal = {
     "TIMESTAMP" <s:StringLiteral> => ast::Literal::TimestampLiteral(s),
 };
 
-Identifier: String = ID => <>.to_string();
+Identifier: symbols::Name = ID => symbols::Name::from(<>);
 
 NumericLiteral: String = {
     NUMERIC_LIT_1 => <>.to_string(),

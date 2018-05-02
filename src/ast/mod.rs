@@ -22,6 +22,7 @@
 
 use super::schema;
 use super::types;
+use super::symbols;
 
 use std::borrow::Borrow;
 
@@ -58,11 +59,11 @@ pub enum Statement {
 /// Representation of an insert statement
 pub struct InsertStatement {
     /// the name of the table into which we want to insert new values
-    pub table_name: Vec<String>,
+    pub table_name: Vec<symbols::Name>,
 
     /// an optional list of columns that define a mapping between the provided values and the columns
     /// defined in the table
-    pub columns: Option<Vec<String>>,
+    pub columns: Option<Vec<symbols::Name>>,
 
     /// An expression that will yield the rows to insert
     pub source: Box<SetExpression>,
@@ -73,10 +74,10 @@ pub struct InsertStatement {
 pub struct CommonTableExpression {
     /// the name under which we will refer to these query results in the remainder of the query
     /// that is using this common table expression
-    pub identifier: String,
+    pub identifier: symbols::Name,
 
     /// column names that can define a re-ordering of the values returned by the enclosed query
-    pub column_names: Option<Vec<String>>,
+    pub column_names: Option<Vec<symbols::Name>>,
 
     /// a query statement that defines the values for this common table expression
     pub query: SelectStatement,
@@ -101,7 +102,7 @@ pub struct SelectStatement {
 /// Represenatation of a delete statement
 pub struct DeleteStatement {
     /// the name of the table from which rows should be deleted
-    pub table_name: Vec<String>,
+    pub table_name: Vec<symbols::Name>,
 
     /// a predicate defining the rows to delete
     pub where_expr: Option<Box<Expression>>,
@@ -110,7 +111,7 @@ pub struct DeleteStatement {
 /// Representation of an update statement
 pub struct UpdateStatement {
     /// the qualified table name
-    pub table_name: Vec<String>,
+    pub table_name: Vec<symbols::Name>,
 
     /// assignments providing new values for table columns
     pub assignments: Vec<Assignment>,
@@ -122,14 +123,14 @@ pub struct UpdateStatement {
 /// Rerpresentation of an attach statement
 pub struct AttachStatement {
     /// the table name within the previous (or default) schema
-    pub qualified_name: Vec<String>,
+    pub qualified_name: Vec<symbols::Name>,
 
     /// the file system path of the external file to be attached as table
     pub path: String,
 }
 
 impl AttachStatement {
-    pub fn new(schema: Option<String>, name: String, path: String) -> AttachStatement {
+    pub fn new(schema: Option<symbols::Name>, name: symbols::Name, path: String) -> AttachStatement {
         let mut qualified_name = Vec::new();
 
         if schema.is_some() {
@@ -144,7 +145,7 @@ impl AttachStatement {
         }
     }
 
-    pub fn schema_name(&self) -> Option<&str> {
+    pub fn schema_name(&self) -> Option<&symbols::Name> {
         match self.qualified_name.len() {
             2 => Some(&self.qualified_name[0]),
             1 => None,
@@ -152,7 +153,7 @@ impl AttachStatement {
         }
     }
 
-    pub fn table_name(&self) -> &str {
+    pub fn table_name(&self) -> &symbols::Name {
         &self.qualified_name.last().unwrap()
     }
 }
@@ -160,11 +161,11 @@ impl AttachStatement {
 /// Representation of a describe statememnt
 pub struct DescribeStatement {
     /// the name of the object to describe
-    pub qualified_name: Vec<String>,
+    pub qualified_name: Vec<symbols::Name>,
 }
 
 impl DescribeStatement {
-    pub fn new(schema: Option<String>, name: String) -> DescribeStatement {
+    pub fn new(schema: Option<symbols::Name>, name: symbols::Name) -> DescribeStatement {
         let mut qualified_name = Vec::new();
 
         if schema.is_some() {
@@ -176,7 +177,7 @@ impl DescribeStatement {
         DescribeStatement { qualified_name }
     }
 
-    pub fn schema_name(&self) -> Option<&str> {
+    pub fn schema_name(&self) -> Option<&symbols::Name> {
         match self.qualified_name.len() {
             2 => Some(&self.qualified_name[0]),
             1 => None,
@@ -184,7 +185,7 @@ impl DescribeStatement {
         }
     }
 
-    pub fn table_name(&self) -> &str {
+    pub fn table_name(&self) -> &symbols::Name {
         &self.qualified_name.last().unwrap()
     }
 }
@@ -192,7 +193,7 @@ impl DescribeStatement {
 /// Assignment used as part of an Update statement. One or more columns are updated with
 /// the provided expression value.
 pub struct Assignment {
-    pub columns: Vec<String>,
+    pub columns: Vec<symbols::Name>,
     pub expr: Box<Expression>,
 }
 
@@ -228,10 +229,10 @@ pub enum TableExpression {
     /// The row set of a given table; possibly providing an alias
     Named {
         /// the qualified table name
-        name: Vec<String>,
+        name: Vec<symbols::Name>,
 
         /// an alias to refer to the row set within this expression
-        alias: Option<String>,
+        alias: Option<symbols::Name>,
     },
     /// A nested select statement
     Select {
@@ -239,7 +240,7 @@ pub enum TableExpression {
         select: SelectStatement,
 
         /// an alias to refer to the row set within this expression
-        alias: Option<String>,
+        alias: Option<symbols::Name>,
     },
     /// The Join of two `TableExpression` values
     Join {
@@ -263,7 +264,7 @@ pub enum JoinConstraint {
     Expr(Box<Expression>),
 
     /// join constraints provided via column value constraints
-    Columns(Vec<String>),
+    Columns(Vec<symbols::Name>),
 }
 
 /// Join operators
@@ -305,7 +306,7 @@ pub enum ResultColumns {
 /// Representation of a single result column specification
 pub enum ResultColumn {
     /// All columns from a given named schema object
-    AllFrom(String),
+    AllFrom(symbols::Name),
 
     /// An expression
     Expr {
@@ -313,7 +314,7 @@ pub enum ResultColumn {
         expr: Box<Expression>,
 
         /// an optional column name in the resulting row set
-        rename: Option<String>,
+        rename: Option<symbols::Name>,
     },
 }
 
@@ -407,7 +408,7 @@ pub enum Expression {
     Literal(Literal),
 
     /// a qualified name referring to an attribute of a bound relation
-    QualifiedIdentifier(Vec<String>),
+    QualifiedIdentifier(Vec<symbols::Name>),
 
     /// tuple construction
     MakeTuple(Vec<Box<Expression>>),
@@ -465,7 +466,7 @@ pub enum SetSpecification {
     List(Vec<Box<Expression>>),
 
     /// a qualified name specifying a collection
-    Name(Vec<String>),
+    Name(Vec<symbols::Name>),
 }
 
 /// Representaion of a when clause used inside a case expression
@@ -523,7 +524,7 @@ pub struct Ordering {
     pub expr: Box<Expression>,
 
     /// an optional collation to use for string comparisons
-    pub collation: Option<String>,
+    pub collation: Option<symbols::Name>,
 
     /// Sort ordering direction
     pub direction: OrderingDirection,
@@ -648,7 +649,7 @@ enum ScalarContextSymbol {
     AttributeConflict,
 
     // a relation with its constituent attributes
-    Relation(collections::HashMap<String, ScalarType>),
+    Relation(collections::BTreeMap<symbols::Name, ScalarType>),
 }
 
 /// A context of bindings used to evaluate a type; for scalars, we are interested in bindings for
@@ -658,18 +659,18 @@ pub struct ScalarContext<'a> {
     set_context: &'a SetContext,
 
     // need a way to capture qualified attributes and attributes without qualification
-    symbols: collections::HashMap<String, ScalarContextSymbol>,
+    symbols: collections::BTreeMap<symbols::Name, ScalarContextSymbol>,
 }
 
 impl<'a> ScalarContext<'a> {
     fn new(set_context: &'a SetContext) -> Self {
         ScalarContext {
             set_context,
-            symbols: collections::HashMap::new(),
+            symbols: collections::BTreeMap::new(),
         }
     }
 
-    fn add_relation(&mut self, name: String, attributes: Vec<Attribute>) -> Result<(), Error> {
+    fn add_relation(&mut self, name: symbols::Name, attributes: Vec<Attribute>) -> Result<(), Error> {
         // add the individual attributes
         for attribute in &attributes {
             match self.symbols.get(&attribute.name) {
@@ -690,7 +691,7 @@ impl<'a> ScalarContext<'a> {
         }
 
         // add the relationship entry
-        let map: collections::HashMap<String, ScalarType> = attributes
+        let map: collections::BTreeMap<symbols::Name, ScalarType> = attributes
             .into_iter()
             .map(|attribute| {
                 (
@@ -717,7 +718,7 @@ impl<'a> ScalarContext<'a> {
         }
     }
 
-    fn infer_type(&self, qualified_name: &[String]) -> Result<ScalarType, Error> {
+    fn infer_type(&self, qualified_name: &[symbols::Name]) -> Result<ScalarType, Error> {
         match qualified_name.len() {
             1 => match self.symbols.get(&qualified_name[0]) {
                 None => Err(Error::from(format!(
@@ -1249,7 +1250,7 @@ impl Literal {
 
 #[derive(Clone, Debug)]
 struct Attribute {
-    name: String,
+    name: symbols::Name,
     typ: types::DataType,
     is_null: bool,
 }
@@ -1263,8 +1264,8 @@ impl Attribute {
 #[derive(Debug, Clone)]
 pub struct RowType {
     attributes: Vec<Attribute>,
-    primary_key: Vec<String>,
-    order_by: Vec<(String, OrderingDirection)>,
+    primary_key: Vec<symbols::Name>,
+    order_by: Vec<(symbols::Name, OrderingDirection)>,
 }
 
 impl<T> From<T> for RowType
@@ -1284,7 +1285,7 @@ where
             })
             .collect();
 
-        let primary_key: Vec<String> = row_set_ref
+        let primary_key: Vec<symbols::Name> = row_set_ref
             .columns
             .iter()
             .filter(|column| column.primary_key)
@@ -1299,8 +1300,8 @@ where
     }
 }
 
-struct ObjectTypes(collections::BTreeMap<String, RowType>);
-struct Namespaces(collections::BTreeMap<String, ObjectTypes>);
+struct ObjectTypes(collections::BTreeMap<symbols::Name, RowType>);
+struct Namespaces(collections::BTreeMap<symbols::Name, ObjectTypes>);
 
 impl<T> From<T> for ObjectTypes
 where
@@ -1345,14 +1346,14 @@ pub struct SetContext {
     namespaces: Namespaces,
 
     // a default namespace name
-    default_namespace: String,
+    default_namespace: symbols::Name,
 
     // need a way to capture common table expression names
-    table_expression: collections::BTreeMap<String, RowType>,
+    table_expression: collections::BTreeMap<symbols::Name, RowType>,
 }
 
 impl SetContext {
-    fn new(database: &schema::Database, default_schema: String) -> Self {
+    fn new(database: &schema::Database, default_schema: symbols::Name) -> Self {
         SetContext {
             namespaces: Namespaces::from(database),
             default_namespace: default_schema,
@@ -1360,7 +1361,7 @@ impl SetContext {
         }
     }
 
-    fn define_relation(&mut self, name: String, typ: RowType) -> Result<(), Error> {
+    fn define_relation(&mut self, name: symbols::Name, typ: RowType) -> Result<(), Error> {
         match self.table_expression.insert(name.clone(), typ) {
             None => Ok(()),
             Some(_) => Err(Error::from(format!(
@@ -1370,17 +1371,15 @@ impl SetContext {
         }
     }
 
-    fn resolve_table_name<'b, T: AsRef<str>>(
+    fn resolve_table_name<'b>(
         &'b self,
-        qualified_name: &[T],
+        qualified_name: &[symbols::Name],
     ) -> Result<&'b RowType, Error>
-    where
-        T: fmt::Display,
     {
         match qualified_name.len() {
             1usize => {
                 // Check for CTE
-                match self.table_expression.get(qualified_name[0].as_ref()) {
+                match self.table_expression.get(&qualified_name[0]) {
                     Some(ref row_type) => return Ok(row_type),
                     None => (),
                 }
@@ -1388,7 +1387,7 @@ impl SetContext {
                 // look for the table name within the default schema
                 match self.namespaces.0.get(&self.default_namespace) {
                     None => panic!("Default namespace not present in database"),
-                    Some(ref namespace) => namespace.0.get(qualified_name[0].as_ref()).ok_or(
+                    Some(ref namespace) => namespace.0.get(&qualified_name[0]).ok_or(
                         Error::from(format!(
                             "Table name {} not found in schema",
                             qualified_name[0]
@@ -1398,7 +1397,7 @@ impl SetContext {
             }
             2usize => {
                 // Verify that the first component is not referencing a CTE
-                match self.table_expression.get(qualified_name[0].as_ref()) {
+                match self.table_expression.get(&qualified_name[0]) {
                     Some(ref row_type) => {
                         return Err(Error::from(
                             "Schema name is hidden by common table expression",
@@ -1409,12 +1408,12 @@ impl SetContext {
 
                 // resolve a qualfied table name
                 // look for the table name within the default schema
-                match self.namespaces.0.get(qualified_name[0].as_ref()) {
+                match self.namespaces.0.get(&qualified_name[0]) {
                     None => Err(Error::from(format!(
                         "Namespace {} not present in database",
                         qualified_name[0]
                     ))),
-                    Some(ref namespace) => namespace.0.get(qualified_name[1].as_ref()).ok_or(
+                    Some(ref namespace) => namespace.0.get(&qualified_name[1]).ok_or(
                         Error::from(format!(
                             "Table name {} not found in schema",
                             qualified_name[1]
@@ -1431,7 +1430,7 @@ impl SetContext {
     // Convenience function to construct SetContext from Database and iterator over common table expressions
     fn initialize<'c, I>(
         database: &schema::Database,
-        default_schema: String,
+        default_schema: symbols::Name,
         cte: I,
     ) -> Result<Self, Error>
     where
@@ -1456,7 +1455,7 @@ impl SetExpression {
                 assert!(rows.len() >= 1);
                 let (mut component_types, _) =
                     fold_err((Vec::new(), 0), rows[0].iter(), |(mut vec, count), expr| {
-                        let name = format!("_col{}", count);
+                        let name = symbols::Name::from(format!("_col{}", count));
                         let expr_type = expr.infer_type(&scalar_context)?;
 
                         match expr_type {
@@ -1617,21 +1616,21 @@ impl SetExpression {
 }
 
 fn generate_column_name(
-    name: &str,
-    generated_names: &mut collections::HashMap<String, usize>,
-) -> String {
+    name: &symbols::Name,
+    generated_names: &mut collections::BTreeMap<symbols::Name, usize>,
+) -> symbols::Name {
     if generated_names.contains_key(name) {
         let result = {
-            let counter = generated_names.entry(name.to_string()).or_insert(0usize);
+            let counter = generated_names.entry(name.clone()).or_insert(0usize);
             *counter += 1;
-            format!("{}{}", name, *counter)
+            symbols::Name::from(format!("{}{}", name, *counter))
         };
 
         generated_names.insert(result.clone(), 0usize);
         result
     } else {
         // first time we see the key
-        let result = name.to_string();
+        let result = name.clone();
         generated_names.insert(result.clone(), 0usize);
         result
     }
@@ -1646,7 +1645,7 @@ impl ResultColumns {
         let mut result_attributes = Vec::new();
 
         // a map where we can track of names already generated
-        let mut generated_columns = collections::HashMap::new();
+        let mut generated_columns = collections::BTreeMap::new();
 
         match self {
             &ResultColumns::All => for attribute in attributes {
@@ -1700,11 +1699,11 @@ impl ResultColumns {
                         }
                         ScalarType::Scalar { typ, is_null } => {
                             let name = match alias {
-                                &None => "col",
-                                &Some(ref name) => &name,
+                                &None => symbols::Name::from("col"),
+                                &Some(ref name) => name.clone(),
                             };
                             result_attributes.push(Attribute {
-                                name: generate_column_name(name, &mut generated_columns),
+                                name: generate_column_name(&name, &mut generated_columns),
                                 typ,
                                 is_null,
                             });
@@ -1797,7 +1796,7 @@ impl SetSpecification {
                     ScalarType::Scalar { typ, is_null } => Ok(RowType {
                         attributes: vec![
                             Attribute {
-                                name: "_col0".to_string(),
+                                name: symbols::Name::from("_col0"),
                                 typ,
                                 is_null,
                             },
@@ -1888,7 +1887,7 @@ impl SelectStatement {
 impl InsertStatement {
     fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
         let row_type = context.resolve_table_name(&self.table_name)?;
-        let mut row_type_map: collections::BTreeMap<String, (types::DataType, bool)> = row_type
+        let mut row_type_map: collections::BTreeMap<symbols::Name, (types::DataType, bool)> = row_type
             .attributes
             .iter()
             .map(|attribute| (attribute.name.clone(), (attribute.typ, attribute.is_null)))
@@ -1957,7 +1956,7 @@ impl UpdateStatement {
     fn validate_type(&self, context: &SetContext) -> Result<(), Error> {
         // validate that the table name exists in the schema. If not => error
         let row_type = context.resolve_table_name(&self.table_name)?;
-        let row_type_map: collections::BTreeMap<String, (types::DataType, bool)> = row_type
+        let row_type_map: collections::BTreeMap<symbols::Name, (types::DataType, bool)> = row_type
             .attributes
             .iter()
             .map(|attribute| (attribute.name.clone(), (attribute.typ, attribute.is_null)))
@@ -1967,7 +1966,7 @@ impl UpdateStatement {
         let mut scalar_context = ScalarContext::new(&context);
 
         scalar_context.add_relation(identifier, row_type.attributes.clone())?;
-        let mut assigned_columns = collections::HashSet::new();
+        let mut assigned_columns = collections::BTreeSet::new();
 
         for assignment in &self.assignments {
             match assignment.expr.infer_type(&scalar_context)? {
@@ -2101,7 +2100,7 @@ impl CommonTableExpression {
                     let index = row_type
                         .attributes
                         .iter()
-                        .position(|column| *column.name == *column_name)
+                        .position(|column| column.name == *column_name)
                         .ok_or(Error::from(format!("Column {} not found", column_name)))?;
                     attributes.push(Attribute {
                         name: column_name.clone(),

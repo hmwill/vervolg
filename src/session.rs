@@ -23,6 +23,7 @@
 use users;
 
 use super::schema;
+use super::symbols;
 
 /// Session state maintainefor interactions with the database.
 pub struct Session {
@@ -33,23 +34,25 @@ pub struct Session {
     pub user: String,
 
     /// The default schema associated with this session; for now, this is the same as the user name
-    pub default_schema: String,
+    pub default_schema: symbols::Name,
 }
 
 impl Session {
     pub fn new() -> Session {
         let username = users::get_current_username().unwrap();
         let mut database = schema::Database::new();
+        let schema_name = symbols::Name::from(&username[..]);
+
         database
-            .create_schema(&username)
+            .create_schema(&schema_name)
             .expect("Database expected to be empty");
 
         Session {
             database,
-            user: username.clone(),
+            user: username,
 
             // we are using the OS user name as schema
-            default_schema: username.clone(),
+            default_schema: schema_name,
         }
     }
 }
