@@ -552,4 +552,3 @@ pub fn append<T>(list: Vec<T>, item: T) -> Vec<T> {
     result.push(item);
     result
 }
-

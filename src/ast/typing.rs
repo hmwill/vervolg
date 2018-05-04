@@ -149,7 +149,11 @@ impl<'a> ScalarContext<'a> {
         }
     }
 
-    fn add_relation(&mut self, name: symbols::Name, attributes: Vec<Attribute>) -> Result<(), Error> {
+    fn add_relation(
+        &mut self,
+        name: symbols::Name,
+        attributes: Vec<Attribute>,
+    ) -> Result<(), Error> {
         // add the individual attributes
         for attribute in &attributes {
             match self.symbols.get(&attribute.name) {
@@ -1615,4 +1619,3 @@ impl CommonTableExpression {
         }
     }
 }
-
