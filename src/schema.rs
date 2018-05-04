@@ -58,6 +58,24 @@ impl Database {
         Ok(())
     }
 
+    pub fn create_table(
+        &mut self,
+        schema_name: &symbols::Name,
+        table_name: &symbols::Name,
+        columns: &[Column],
+    ) -> Result<(), Error> {
+        unimplemented!()
+    }
+
+    pub fn create_view(
+        &mut self,
+        schema_name: &symbols::Name,
+        table_name: &symbols::Name,
+        query: &str,
+    ) -> Result<(), Error> {
+        unimplemented!()
+    }
+
     pub fn attach_file(
         &mut self,
         schema_name: &symbols::Name,
@@ -85,7 +103,11 @@ impl Database {
         Ok(())
     }
 
-    pub fn describe(&self, schema_name: &symbols::Name, object_name: &symbols::Name) -> Result<RowSet, Error> {
+    pub fn describe(
+        &self,
+        schema_name: &symbols::Name,
+        object_name: &symbols::Name,
+    ) -> Result<RowSet, Error> {
         // validate that the schema name is valid
         let schema = self.schemata
             .get(schema_name)

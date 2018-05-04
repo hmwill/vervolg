@@ -64,7 +64,6 @@ impl PartialEq for Name {
     }
 }
 
-// Char implements Eq, so we can propagate it through
 impl Eq for Name {}
 
 impl <> PartialEq<str> for Name {
@@ -83,7 +82,6 @@ impl PartialOrd for Name {
     }
 }
 
-// Char implements Ord, so we can propagate it through
 impl Ord for Name {
     fn cmp(&self, other: &Name) -> Ordering {
         let self_iter = self.string.chars().flat_map(|c| c.to_uppercase());
