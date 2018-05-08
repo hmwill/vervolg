@@ -25,7 +25,7 @@ use std::fmt;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Name {
-    string: String
+    string: String,
 }
 
 impl Name {
@@ -44,7 +44,7 @@ impl fmt::Display for Name {
     }
 }
 
-impl <'a> From<&'a str> for Name {
+impl<'a> From<&'a str> for Name {
     fn from(value: &'a str) -> Name {
         Name::new(String::from(value))
     }
@@ -52,7 +52,7 @@ impl <'a> From<&'a str> for Name {
 
 impl From<String> for Name {
     fn from(value: String) -> Name {
-        Name::new(value) 
+        Name::new(value)
     }
 }
 
@@ -66,7 +66,7 @@ impl PartialEq for Name {
 
 impl Eq for Name {}
 
-impl <> PartialEq<str> for Name {
+impl PartialEq<str> for Name {
     fn eq(&self, other: &str) -> bool {
         let self_iter = self.string.chars().flat_map(|c| c.to_uppercase());
         let other_iter = other.chars().flat_map(|c| c.to_uppercase());
@@ -90,11 +90,10 @@ impl Ord for Name {
     }
 }
 
-impl <> PartialOrd<str> for Name {
+impl PartialOrd<str> for Name {
     fn partial_cmp(&self, other: &str) -> Option<Ordering> {
         let self_iter = self.string.chars().flat_map(|c| c.to_uppercase());
         let other_iter = other.chars().flat_map(|c| c.to_uppercase());
         self_iter.partial_cmp(other_iter)
     }
 }
-

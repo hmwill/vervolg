@@ -24,7 +24,7 @@ use std::fmt;
 
 /// The types supported by this engine
 #[derive(Serialize, Deserialize, PartialEq, Debug, Copy, Clone)]
-pub enum DataType {    
+pub enum DataType {
     /// Generic describes values without specific type constraints; will be parsed and converted on demand
     Generic,
 
@@ -70,7 +70,7 @@ impl DataType {
     pub fn is_ordered(&self) -> bool {
         match self {
             &DataType::Varchar
-            | &DataType::Numeric 
+            | &DataType::Numeric
             | &DataType::Date
             | &DataType::Time
             | &DataType::Timestamp => true,
