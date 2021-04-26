@@ -20,11 +20,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::ast;
-use super::schema;
-use super::session;
-use super::sql;
-use super::Error;
+
+use ast;
+use schema;
+use session;
+use Error;
+
+lalrpop_mod!(pub sql);
 
 use csv::StringRecord;
 
@@ -391,7 +393,7 @@ impl<'a> Evaluator<'a> {
     }
 
     fn parse(&self, command: &str) -> Result<ast::SqlStatement, Error> {
-        let parse_result = sql::parse_SqlStatement(command);
+        let parse_result = sql::SqlStatementParser::new().parse(command);
 
         match parse_result {
             Ok(statement) => Ok(statement),

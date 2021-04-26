@@ -57,7 +57,35 @@ pub enum Statement {
     Insert(InsertStatement),
     Delete(DeleteStatement),
     Update(UpdateStatement),
+
+    AlterDomain(AlterDomainStatement),
+    CreateDomain(CreateDomainStatement),
+    DropDomain(DropDomainStatement),
+
+    CreateSchema(CreateSchemaStatement),
+    DropSchema(DropSchemaStatement),
+
+    AlterTable(AlterTableStatement),
+    CreateTable(CreateTableStatement),
+    DropTable(DropTableStatement),
+
+    CreateView(CreateViewStatement),
+    DropView(DropViewStatement),
 }
+
+pub struct AlterDomainStatement { }
+pub struct CreateDomainStatement { }
+pub struct DropDomainStatement { }
+
+pub struct CreateSchemaStatement { }
+pub struct DropSchemaStatement { }
+
+pub struct AlterTableStatement { }
+pub struct CreateTableStatement { }
+pub struct DropTableStatement { }
+
+pub struct CreateViewStatement { }
+pub struct DropViewStatement { }
 
 /// Representation of an insert statement
 pub struct InsertStatement {

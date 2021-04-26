@@ -1329,6 +1329,16 @@ impl Statement {
             &Statement::Insert(ref insert) => insert.validate_type(context),
             &Statement::Update(ref update) => update.validate_type(context),
             &Statement::Delete(ref delete) => delete.validate_type(context),
+            &Statement::AlterDomain(_) => unimplemented!("validate_type for ALTER DOMAIN"),
+            &Statement::CreateDomain(_) => unimplemented!("validate_type for CREATE DOMAIN"),
+            &Statement::DropDomain(_) => unimplemented!("validate_type for DROP DOMAIN"),
+            &Statement::AlterTable(_) => unimplemented!("validate_type for ALTER TABLE"),
+            &Statement::CreateTable(_) => unimplemented!("validate_type for CREATE TABLE"),
+            &Statement::DropTable(_) => unimplemented!("validate_type for DROP TABLE"),
+            &Statement::CreateSchema(_) => unimplemented!("validate_type for CREATE SCHEMA"),
+            &Statement::DropSchema(_) => unimplemented!("validate_type for DROP SCHEMA"),
+            &Statement::CreateView(_) => unimplemented!("validate_type for CREATE VIEW"),
+            &Statement::DropView(_) => unimplemented!("validate_type for DROP VIEW"),
         }
     }
 }

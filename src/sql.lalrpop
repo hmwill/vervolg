@@ -20,34 +20,59 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::ast;
-use super::symbols;
+use ast;
+use symbols;
 
 grammar;
 
 // Lexer specification, with the primary purpose of making language keywords case insensitive
 match {
+    r"(?i)action" => "ACTION",
+    r"(?i)add" => "ADD",
     r"(?i)all" => "ALL",
+    r"(?i)alter" => "ALTER",
     r"(?i)and" => "AND",
     r"(?i)as" => "AS",
     r"(?i)asc" => "ASC",
     r"(?i)attach" => "ATTACH",
+    r"(?i)authorization" => "AUTHORIZATION",
 
     r"(?i)between" => "BETWEEN",
+    r"(?i)binary" => "BINARY",
+    r"(?i)bit" => "BIT",
     r"(?i)by" => "BY",
+    r"(?i)bool" => "BOOL",
+    r"(?i)boolean" => "BOOLEAN",
 
     r"(?i)case" => "CASE",
+    r"(?i)cascade" => "CASCADE",
+    r"(?i)cascaded" => "CASCADED",
+    r"(?i)char" => "CHAR",
+    r"(?i)character" => "CHARACTER",
+    r"(?i)check" => "CHECK",
     r"(?i)collate" => "COLLATE",
+    r"(?i)column" => "COLUMN",
+    r"(?i)constraint" => "CONSTRAINT",
+    r"(?i)create" => "CREATE",
     r"(?i)cross" => "CROSS",
     r"(?i)current_date" => "CURRENT_DATE",
     r"(?i)current_time" => "CURRENT_TIME",
     r"(?i)current_timestamp" => "CURRENT_TIMESTAMP",
     
     r"(?i)date" => "DATE",
+    r"(?i)day" => "DAY",
+    r"(?i)dec" => "DEC",
+    r"(?i)decimal" => "DECIMAL",
+    r"(?i)default" => "DEFAULT",
+    r"(?i)deferred" => "DEFERRED",
+    r"(?i)deferrable" => "DEFERRABLE",
     r"(?i)delete" => "DELETE",
     r"(?i)desc" => "DESC",
     r"(?i)describe" => "DESCRIBE",
     r"(?i)distinct" => "DISTINCT",
+    r"(?i)double" => "DOUBLE",
+    r"(?i)domain" => "DOMAIN",
+    r"(?i)drop" => "DROP",
     
     r"(?i)else" => "ELSE",
     r"(?i)end" => "END",
@@ -55,61 +80,100 @@ match {
     r"(?i)except" => "EXCEPT",
     
     r"(?i)file" => "FILE",
+    r"(?i)float" => "FLOAT",
+    r"(?i)foreign" => "FOREIGN",
     r"(?i)from" => "FROM",
     r"(?i)full" => "FULL",
 
     r"(?i)group" => "GROUP",
 
     r"(?i)having" => "HAVING",
+    r"(?i)hour" => "HOUR",
 
+    r"(?i)immediate" => "IMMEDIATE",
     r"(?i)in" => "IN",
+    r"(?i)initially" => "INITIALLY",
     r"(?i)inner" => "INNER",
     r"(?i)insert" => "INSERT",
+    r"(?i)int" => "INT",
+    r"(?i)integer" => "INTEGER",
     r"(?i)intersect" => "INTERSECT",
+    r"(?i)interval" => "INTERVAL",
     r"(?i)into" => "INTO",
     r"(?i)is" => "IS",
     r"(?i)isnull" => "ISNULL",
 
     r"(?i)join" => "JOIN",
     
+    r"(?i)key" => "KEY",    
+
     r"(?i)left" => "LEFT",    
     r"(?i)limit" => "LIMIT",
     r"(?i)like" => "LIKE",
+    r"(?i)local" => "LOCAL",
+
+    r"(?i)match" => "MATCH",
+    r"(?i)minute" => "MINUTE",
+    r"(?i)month" => "MONTH",
 
     r"(?i)natural" => "NATURAL",
+    r"(?i)no" => "NO",
     r"(?i)not" => "NOT",
     r"(?i)notnull" => "NOTNULL",
     r"(?i)null" => "NULL",
+    r"(?i)numeric" => "NUMERIC",
     
     r"(?i)offset" => "OFFSET",
     r"(?i)on" => "ON",
+    r"(?i)option" => "OPTION",
     r"(?i)or" => "OR",
     r"(?i)order" => "ORDER",
     r"(?i)outer" => "OUTER",
     
+    r"(?i)partial" => "PARTIAL",
     r"(?i)plan" => "PLAN",
+    r"(?i)precision" => "PRECISION",
+    r"(?i)primary" => "PRIMARY",
 
     r"(?i)query" => "QUERY",
 
+    r"(?i)real" => "REAL",
+    r"(?i)references" => "REFERENCES",
+    r"(?i)restrict" => "RESTRICT",
     r"(?i)right" => "RIGHT",
 
+    r"(?i)schema" => "SCHEMA",
+    r"(?i)second" => "SECOND",
     r"(?i)select" => "SELECT",
     r"(?i)set" => "SET",
+    r"(?i)smallint" => "SMALLINT",
+    r"(?i)st_geometry" => "ST_GEOMETRY",
+    r"(?i)st_geography" => "ST_GEOGRAPHY",
 
     r"(?i)table" => "TABLE",
     r"(?i)then" => "THEN",
     r"(?i)time" => "TIME",
     r"(?i)timestamp" => "TIMESTAMP",
+    r"(?i)to" => "TO",
     
     r"(?i)update" => "UPDATE",
     r"(?i)union" => "UNION",
+    r"(?i)unique" => "UNIQUE",
     r"(?i)using" => "USING",
 
     r"(?i)values" => "VALUES",
+    r"(?i)varbinary" => "VARBINARY",
+    r"(?i)varchar" => "VARCHAR",
+    r"(?i)varying" => "VARYING",
+    r"(?i)view" => "VIEW",
 
     r"(?i)when" => "WHEN",
     r"(?i)where" => "WHERE",
     r"(?i)with" => "WITH",
+
+    r"(?i)year" => "YEAR",
+
+    r"(?i)zone" => "ZONE",
 
     "," => ",",
     "." => ".",
@@ -146,7 +210,333 @@ Statement: ast::Statement = {
     InsertStatement => ast::Statement::Insert(<>),
     DeleteStatement => ast::Statement::Delete(<>),
     UpdateStatement => ast::Statement::Update(<>),
+
+    CreateSchemaStatement => ast::Statement::CreateSchema(<>),
+    DropSchemaStatement => ast::Statement::DropSchema(<>),
+
+    AlterDomainStatement => ast::Statement::AlterDomain(<>),
+    CreateDomainStatement => ast::Statement::CreateDomain(<>),
+    DropDomainStatement => ast::Statement::DropDomain(<>),
+
+    AlterTableStatement => ast::Statement::AlterTable(<>),
+    CreateTableStatement => ast::Statement::CreateTable(<>),
+    DropTableStatement => ast::Statement::DropTable(<>),
+
+    CreateViewStatement => ast::Statement::CreateView(<>),
+    DropViewStatement => ast::Statement::DropView(<>),
 };
+
+//
+// Data Definition
+//
+
+CreateSchemaStatement: ast::CreateSchemaStatement = {
+    "CREATE" "SCHEMA" Identifier AuthorizationUser? DefaultCharacterSet? => ast::CreateSchemaStatement { },
+    "CREATE" "SCHEMA" AuthorizationUser DefaultCharacterSet? => ast::CreateSchemaStatement { },
+};
+
+AuthorizationUser = {
+    "AUTHORIZATION" UserName,
+};
+
+UserName: symbols::Name = {
+    <user: Identifier> => user,
+};
+
+TableName: symbols::Name = {
+    <table: Identifier> => table,
+};
+
+DefaultCharacterSet = {
+    "DEFAULT" "CHARACTER" "SET" CharacterSet,
+};
+
+CharacterSet: symbols::Name = {
+    <character_set: Identifier> => character_set,
+};
+
+DropSchemaStatement: ast::DropSchemaStatement = {
+    "DROP" "SCHEMA" Identifier DropMode => ast::DropSchemaStatement { },
+};
+
+DropMode = {
+    "RESTRICT",
+    "CASCADE",
+};
+
+CreateDomainStatement: ast::CreateDomainStatement = {
+    "CREATE" "DOMAIN" DomainName "AS"? DataType DefaultDefinition? 
+        DomainConstraintDefinitionList?
+        => ast::CreateDomainStatement { },
+};
+
+DefaultDefinition = {
+    "DEFAULT" DefaultValue,
+};
+
+DefaultValue = {
+    NumericLiteral => ast::Literal::NumericLiteral(<>),
+    StringLiteral => ast::Literal::StringLiteral(<>),
+    "NULL" => ast::Literal::Null,
+    NiladicFunction,
+};
+
+DomainConstraintDefinitionList: () = {
+    DomainConstraintDefinition => (),
+    <l: DomainConstraintDefinitionList> <d:DomainConstraintDefinition> => (),
+};
+
+DomainConstraintDefinition: () = {
+    NamedConstraint? "CHECK" "(" ConditionalExpression ")" => (),
+};
+
+ConditionalExpression: () = {
+    Expression => (),
+};
+
+NamedConstraint: () = {
+    "CONSTRAINT" ConstraintName => (),
+};
+
+AlterDomainStatement: ast::AlterDomainStatement = {
+    "ALTER" "DOMAIN" DomainName DomainAlterationAction => ast::AlterDomainStatement { },
+};
+
+DomainAlterationAction: () = {
+    "SET" DefaultDefinition => (),
+    "DROP" "DEFAULT" => (),
+    "ADD" DomainConstraintDefinition => (),
+    "DROP" "CONSTRAINT" ConstraintName => (),
+};
+
+DropDomainStatement: ast::DropDomainStatement = {
+    "DROP" "DOMAIN" DomainName DropMode => ast::DropDomainStatement { },
+};
+
+DomainName: symbols::Name = {
+    <domain: Identifier> => domain,
+};
+
+ConstraintName: symbols::Name = {
+    <constraint: Identifier> => constraint,
+};
+
+ViewName: symbols::Name = {
+    <view: Identifier> => view,
+};
+
+AlterTableStatement: ast::AlterTableStatement = {
+    "ALTER" "TABLE" TableName TableAlterationAction => ast::AlterTableStatement { },
+};
+
+TableAlterationAction = {
+    TableColummnAlterationAction,
+    TableConstraintAlterationAction,
+};
+
+TableColummnAlterationAction: () = {
+    "ADD" "COLUMN"? ColumnDefinition => (),
+    "ALTER" "COLUMN"? Identifier "SET" DefaultDefinition => (),
+    "ALTER" "COLUMN"? Identifier "DROP" "DEFAULT" => (),
+    "DROP" "COLUMN"? Identifier DropMode => (),
+};
+
+TableConstraintAlterationAction: () = {
+    "ADD" TableConstraintDefinition => (),
+    "DROP" "CONSTRAINT" ConstraintName DropMode => (),
+};
+
+CreateTableStatement: ast::CreateTableStatement = {
+    "CREATE" "TABLE" TableName BaseTableElementCommaList => ast::CreateTableStatement { },
+};
+
+BaseTableElementCommaList: () = {
+    BaseTableElement => (),
+    BaseTableElementCommaList "," BaseTableElement => (),
+};
+
+BaseTableElement: () = {
+    ColumnDefinition => (),
+    TableConstraintDefinition => (),
+};
+
+ColumnDefinition: () = {
+    <column: Identifier> DataType DefaultDefinition? ColumnConstraintDefinitionList? => (),
+    <column: Identifier> DomainName DefaultDefinition? ColumnConstraintDefinitionList? => (),
+};
+
+ColumnConstraintDefinitionList: () = {
+    ColumnConstraintDefinition => (),
+    ColumnConstraintDefinitionList ColumnConstraintDefinition => (),
+};
+
+ColumnConstraintDefinition: () = {
+    NamedConstraint? "NOT" "NULL" => (),
+    NamedConstraint? "PRIMARY" "KEY" => (),
+    NamedConstraint? "UNIQUE" => (),
+    NamedConstraint? ReferencesDef => (), 
+    NamedConstraint? "CHECK" "(" ConditionalExpression ")" => (),
+};
+
+ReferencesDef: () = {
+    "REFERENCES" TableName ColumnNameList? MatchMode? OnDeleteAction? OnUpdateAction? => (),
+};
+
+MatchMode = {
+    "MATCH" "FULL",
+    "MATCH" "PARTIAL",
+};
+
+OnDeleteAction = {
+    "ON" "DELETE" ReferentialAction,
+};
+
+OnUpdateAction = {
+    "ON" "UPDATE" ReferentialAction,
+};
+
+ReferentialAction: () = {
+    "NO" "ACTION" => (),
+    "CASCADE" => (),
+    "SET" "DEFAULT" => (),
+    "SET" "NULL" => (),
+};
+
+TableConstraintDefinition: () = {
+    NamedConstraint? CandidiateKeyDef,
+    NamedConstraint? ForeignKeyDef,
+    NamedConstraint? CheckConstraintDef,
+};
+
+CandidiateKeyDef: () = {
+    "PRIMARY" "KEY" ColumnNameList => (),
+    "UNIQUE" ColumnNameList => (),
+};
+
+ForeignKeyDef: () = {
+    "FOREIGN" "KEY" ColumnNameList 
+        ReferencesDef 
+        => (),
+};
+
+CheckConstraintDef: () = {
+    "CHECK" "(" ConditionalExpression ")" => (),
+};
+
+DropTableStatement: ast::DropTableStatement = {
+    "DROP" "TABLE" TableName DropMode => ast::DropTableStatement { },
+};
+
+CreateViewStatement: ast::CreateViewStatement = {
+    "CREATE" "VIEW" ViewName ColumnNameList?
+        "AS" TableExpression CreateViewOptions? => ast::CreateViewStatement { },
+};
+
+CreateViewOptions = {
+    "WITH" "CASCADED" "CHECK" "OPTION",
+    "WITH" "LOCAL" "CHECK" "OPTION",
+};
+
+DropViewStatement: ast::DropViewStatement = {
+    "DROP" "VIEW" ViewName DropMode => ast::DropViewStatement { },
+};
+
+DataType: () = {
+    CharacterType => (),
+    BinaryType => (),
+    LogicalType => (),
+    NumericType => (),
+    GeometryType => (),
+    DateTimeType => (),
+};
+
+CharacterType: () = {
+    "CHARACTER" LengthSpecification? => (),
+    "CHARACTER" "VARYING" LengthSpecification? => (),
+    "VARCHAR" LengthSpecification? => (),
+};
+
+LengthSpecification: () = {
+    "(" IntegerLiteral ")" => (),
+};
+
+FractionSpecification: () = {
+    "(" IntegerLiteral ")" => (),
+};
+
+IntegerLiteral = {
+    NumericLiteral,
+};
+
+BinaryType: () = {
+    "BINARY" LengthSpecification? => (),
+    "VARYING" "BINARY" LengthSpecification => (),
+    "VARBINARY" LengthSpecification => (),
+};
+
+LogicalType: () = {
+    "BIT" LengthSpecification? => (),
+    "VARYING" "BIT" LengthSpecification => (),
+    "BOOL" => (),
+    "BOOLEAN" => (),
+};
+
+NumericType = {
+    ExactNumericType,
+    ApproximateNumericType,
+};
+
+ExactNumericType: () = {
+    "NUMERIC" PrecisionSpecification? => (),
+    "DECIMAL" PrecisionSpecification? => (),
+    "INTEGER" => (),
+    "SMALLINT" => (),
+};
+
+ApproximateNumericType: () = {
+    "FLOAT" FractionSpecification? => (),
+    "REAL" => (),
+    "DOUBLE" "PRECISION" => (),
+};
+
+PrecisionSpecification: () = {
+    "(" IntegerLiteral ")" => (),
+    "(" IntegerLiteral "," IntegerLiteral ")" => (),
+};
+
+GeometryType: () = {
+    "ST_GEOGRAPHY" LengthSpecification => (),
+    "ST_GEOMETRY" LengthSpecification => (),
+};
+
+DateTimeType: () = {
+    "DATE" => (),
+    "TIME" FractionSpecification? WithTimeZone? => (),
+    "TIMESTAMP" FractionSpecification? WithTimeZone? => (),
+    IntervalType => (),
+};
+
+WithTimeZone = {
+    "WITH" "TIME" "ZONE",
+};
+
+IntervalType: () = {
+    "INTERVAL" IntervalUnit PrecisionSpecification? => (),
+    "INTERVAL" IntervalUnit PrecisionSpecification "TO" IntervalUnit PrecisionSpecification? => (),
+};
+
+IntervalUnit = {
+    "YEAR",
+    "MONTH",
+    "DAY",
+    "HOUR",
+    "MINUTE",
+    "SECOND",
+};
+
+//
+// Data Manipulation
+//
 
 InsertStatement: ast::InsertStatement = {
     TableExpressions? "INSERT" "INTO" <table_name:QualifiedIdentifier> <columns:ColumnNameList?> <source:SelectCore> =>
@@ -537,13 +927,17 @@ LiteralValue: ast::Literal = {
     NumericLiteral => ast::Literal::NumericLiteral(<>),
     StringLiteral => ast::Literal::StringLiteral(<>),
     "NULL" => ast::Literal::Null,
-    "CURRENT_TIME" => ast::Literal::CurrentTime,
-    "CURRENT_DATE" => ast::Literal::CurrentDate,
-    "CURRENT_TIMESTAMP" => ast::Literal::CurrentTimestamp,
+    NiladicFunction,
     "DATE" <s:StringLiteral> => ast::Literal::DateLiteral(s),
     "TIME" <s:StringLiteral> => ast::Literal::TimeLiteral(s),
     "TIMESTAMP" <s:StringLiteral> => ast::Literal::TimestampLiteral(s),
 };
+
+NiladicFunction: ast::Literal = {
+    "CURRENT_TIME" => ast::Literal::CurrentTime,
+    "CURRENT_DATE" => ast::Literal::CurrentDate,
+    "CURRENT_TIMESTAMP" => ast::Literal::CurrentTimestamp,
+}
 
 Identifier: symbols::Name = ID => symbols::Name::from(<>);
 

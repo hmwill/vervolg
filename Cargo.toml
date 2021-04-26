@@ -21,7 +21,7 @@ tabwriter = "1"
 version = "0.2.0"
 
 [dependencies.lalrpop-util]
-version = "0.13.1"
+version = "0.19.5"
 
 [build-dependencies.lalrpop]
-version = "0.13.1"
+version = "0.19.5"

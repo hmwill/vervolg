@@ -25,7 +25,7 @@ use users;
 use super::schema;
 use super::symbols;
 
-/// Session state maintainefor interactions with the database.
+/// Session state maintained for interactions with the database.
 pub struct Session {
     /// The database object describing all known schemata
     pub database: schema::Database,

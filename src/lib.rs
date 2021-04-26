@@ -25,11 +25,13 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
+#[macro_use] 
+extern crate lalrpop_util;
+
 extern crate csv;
 extern crate users;
 
 pub mod ast;
-pub mod sql;
 pub mod schema;
 pub mod types;
 pub mod eval;
