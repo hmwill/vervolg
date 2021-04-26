@@ -198,6 +198,50 @@ match {
     r"'[^[[:cntrl:]]']*'" => STRING_LIT
 }
 
+//
+// Names
+//
+
+UserName: symbols::Name = {
+    <user: Identifier> => user,
+};
+
+SchemaName: symbols::Name = {
+    <schema: Identifier> => schema,
+};
+
+NameQualifier: symbols::Name = {
+    <schema: SchemaName> "." => schema,
+};
+
+CharacterSetName: symbols::Name = {
+    NameQualifier? <character_set: Identifier> => character_set,
+};
+
+TableName: symbols::Name = {
+    NameQualifier? <table: Identifier> => table,
+};
+
+DomainName: symbols::Name = {
+    NameQualifier? <domain: Identifier> => domain,
+};
+
+ConstraintName: symbols::Name = {
+    NameQualifier? <constraint: Identifier> => constraint,
+};
+
+ViewName: symbols::Name = {
+    NameQualifier? <view: Identifier> => view,
+};
+
+TableOrViewName: symbols::Name = {
+    NameQualifier? <table_or_view: Identifier> => table_or_view,
+};
+
+//
+// Statements
+//
+
 pub SqlStatement: ast::SqlStatement = {
     <statement: Statement> => ast::SqlStatement::Statement(statement),
     "EXPLAIN" ("QUERY" "PLAN")? <statement: Statement> => ast::SqlStatement::ExplainQueryPlan(statement),
@@ -231,28 +275,16 @@ Statement: ast::Statement = {
 //
 
 CreateSchemaStatement: ast::CreateSchemaStatement = {
-    "CREATE" "SCHEMA" Identifier AuthorizationUser? DefaultCharacterSet? => ast::CreateSchemaStatement { },
-    "CREATE" "SCHEMA" AuthorizationUser DefaultCharacterSet? => ast::CreateSchemaStatement { },
+    "CREATE" "SCHEMA" Identifier AuthorizationUser? DefaultCharacterSetName? => ast::CreateSchemaStatement { },
+    "CREATE" "SCHEMA" AuthorizationUser DefaultCharacterSetName? => ast::CreateSchemaStatement { },
 };
 
 AuthorizationUser = {
     "AUTHORIZATION" UserName,
 };
 
-UserName: symbols::Name = {
-    <user: Identifier> => user,
-};
-
-TableName: symbols::Name = {
-    <table: Identifier> => table,
-};
-
-DefaultCharacterSet = {
-    "DEFAULT" "CHARACTER" "SET" CharacterSet,
-};
-
-CharacterSet: symbols::Name = {
-    <character_set: Identifier> => character_set,
+DefaultCharacterSetName = {
+    "DEFAULT" "CHARACTER" "SET" CharacterSetName,
 };
 
 DropSchemaStatement: ast::DropSchemaStatement = {
@@ -311,18 +343,6 @@ DomainAlterationAction: () = {
 
 DropDomainStatement: ast::DropDomainStatement = {
     "DROP" "DOMAIN" DomainName DropMode => ast::DropDomainStatement { },
-};
-
-DomainName: symbols::Name = {
-    <domain: Identifier> => domain,
-};
-
-ConstraintName: symbols::Name = {
-    <constraint: Identifier> => constraint,
-};
-
-ViewName: symbols::Name = {
-    <view: Identifier> => view,
 };
 
 AlterTableStatement: ast::AlterTableStatement = {
@@ -776,17 +796,13 @@ LimitClause: ast::Limit = {
 };
 
 AttachStatement: ast::AttachStatement = {
-    "ATTACH" "FILE" <path: StringLiteral> "AS" <schema: SchemaName?> <name: Identifier> => 
+    "ATTACH" "FILE" <path: StringLiteral> "AS" <schema: NameQualifier?> <name: Identifier> => 
         ast::AttachStatement::new(schema, name, path),
 };
 
 DescribeStatement: ast::DescribeStatement = {
-    "DESCRIBE" <schema: SchemaName?> <name: Identifier> => 
+    "DESCRIBE" <schema: NameQualifier?> <name: Identifier> => 
         ast::DescribeStatement::new(schema, name),
-};
-
-SchemaName: symbols::Name = {
-    <schema: Identifier> "." => schema,
 };
 
 //
