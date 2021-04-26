@@ -451,9 +451,29 @@ DataType: () = {
 };
 
 CharacterType: () = {
-    "CHARACTER" LengthSpecification? => (),
-    "CHARACTER" "VARYING" LengthSpecification? => (),
+    Character LengthSpecification? => (),
+    Character "VARYING" LengthSpecification? => (),
     "VARCHAR" LengthSpecification? => (),
+};
+
+Character = {
+    "CHAR",
+    "CHARACTER",
+};
+
+Decimal = {
+    "DEC",
+    "DECIMAL",
+};
+
+Integer = {
+    "INT",
+    "INTEGER",
+};
+
+Boolean = {
+    "BOOL",
+    "BOOLEAN",
 };
 
 LengthSpecification: () = {
@@ -477,8 +497,7 @@ BinaryType: () = {
 LogicalType: () = {
     "BIT" LengthSpecification? => (),
     "VARYING" "BIT" LengthSpecification => (),
-    "BOOL" => (),
-    "BOOLEAN" => (),
+    Boolean => (),
 };
 
 NumericType = {
@@ -488,8 +507,8 @@ NumericType = {
 
 ExactNumericType: () = {
     "NUMERIC" PrecisionSpecification? => (),
-    "DECIMAL" PrecisionSpecification? => (),
-    "INTEGER" => (),
+    Decimal PrecisionSpecification? => (),
+    Integer => (),
     "SMALLINT" => (),
 };
 
