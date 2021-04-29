@@ -52,7 +52,7 @@ fn main() {
                 match result {
                     Ok(mut rowset) => {
                         let stdout = io::stdout();
-                        let mut handle = stdout.lock();
+                        let handle = stdout.lock();
                         let mut tw = TabWriter::new(handle);
 
                         while let Some(row) = rowset.next() {

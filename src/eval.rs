@@ -299,14 +299,14 @@ impl RowSet for SortRowSet {
 }
 
 struct LimitRowSet {
-    nested: Box<RowSet>,
+    nested: Box<dyn RowSet>,
     counter: usize,
     offset: usize,
     limit: usize,
 }
 
 impl LimitRowSet {
-    fn new(nested: Box<RowSet>, limit: usize, offset: usize) -> Self {
+    fn new(nested: Box<dyn RowSet>, limit: usize, offset: usize) -> Self {
         LimitRowSet {
             nested,
             counter: 0,
@@ -387,7 +387,7 @@ impl<'a> Evaluator<'a> {
         Evaluator { session }
     }
 
-    pub fn eval(&mut self, command: &str) -> Result<Box<RowSet>, Error> {
+    pub fn eval(&mut self, command: &str) -> Result<Box<dyn RowSet>, Error> {
         let ast = self.parse(command)?;
         self.interpret(ast)
     }
@@ -404,7 +404,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn interpret(&mut self, statement: ast::SqlStatement) -> Result<Box<RowSet>, Error> {
+    fn interpret(&mut self, statement: ast::SqlStatement) -> Result<Box<dyn RowSet>, Error> {
         match statement {
             ast::SqlStatement::Statement(statement) => self.compile(statement),
             ast::SqlStatement::ExplainQueryPlan(statement) => {
@@ -416,7 +416,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile(&self, dml: ast::Statement) -> Result<Box<RowSet>, Error> {
+    fn compile(&self, dml: ast::Statement) -> Result<Box<dyn RowSet>, Error> {
         match dml {
             ast::Statement::Select(select) => self.compile_select(select),
             _ => Err(Error::from(
@@ -425,7 +425,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile_select(&self, select: ast::SelectStatement) -> Result<Box<RowSet>, Error> {
+    fn compile_select(&self, select: ast::SelectStatement) -> Result<Box<dyn RowSet>, Error> {
         // compile the expression
         let rowset = self.compile_set_expression(&select.expr);
 
@@ -436,7 +436,7 @@ impl<'a> Evaluator<'a> {
 
         // do we have a limit clause?
         if select.limit.is_some() {
-            let limit = select.limit.unwrap();
+            let _limit = select.limit.unwrap();
             let offset = 0; // TODO implement evaluation of expression
             let row_count = 0; // TODO implement evaluation of expression
             Ok(Box::new(LimitRowSet::new(rowset?, offset, row_count)))
@@ -445,7 +445,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile_set_expression(&self, expr: &ast::SetExpression) -> Result<Box<RowSet>, Error> {
+    fn compile_set_expression(&self, expr: &ast::SetExpression) -> Result<Box<dyn RowSet>, Error> {
         match expr {
             &ast::SetExpression::Values(ref values) => unimplemented!(),
             &ast::SetExpression::Op {
@@ -476,7 +476,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile_table_expression(&self, expr: &ast::TableExpression) -> Result<Box<RowSet>, Error> {
+    fn compile_table_expression(&self, expr: &ast::TableExpression) -> Result<Box<dyn RowSet>, Error> {
         match expr {
             &ast::TableExpression::Named {
                 ref name,
