@@ -461,19 +461,19 @@ DropViewStatement: ast::DropViewStatement = {
     "DROP" "VIEW" ViewName DropMode => ast::DropViewStatement { },
 };
 
-DataType: () = {
-    CharacterType => (),
-    BinaryType => (),
-    LogicalType => (),
-    NumericType => (),
-    GeometryType => (),
-    DateTimeType => (),
+DataType: ast::DataType = {
+    CharacterType,
+    BinaryType,
+    LogicalType,
+    NumericType,
+    GeometryType,
+    DateTimeType,
 };
 
-CharacterType: () = {
-    Character LengthSpecification? => (),
-    Character "VARYING" LengthSpecification? => (),
-    "VARCHAR" LengthSpecification? => (),
+CharacterType: ast::DataType = {
+    Character <length: LengthSpecification?> => ast::DataType::Char(length.unwrap_or(1)),
+    Character "VARYING" <length: LengthSpecification> => ast::DataType::VarChar(length),
+    "VARCHAR" <length: LengthSpecification> => ast::DataType::VarChar(length),
 };
 
 Character = {
@@ -496,81 +496,89 @@ Boolean = {
     "BOOLEAN",
 };
 
-LengthSpecification: () = {
-    "(" IntegerLiteral ")" => (),
+LengthSpecification: usize = {
+    "(" <length: IntegerLiteral> ")" => length,
 };
 
-FractionSpecification: () = {
-    "(" IntegerLiteral ")" => (),
+FractionSpecification: usize = {
+    "(" <fraction: IntegerLiteral> ")" => fraction,
 };
 
-IntegerLiteral = {
-    NumericLiteral,
+IntegerLiteral: usize = {
+    // the regex for numeric literals should limit values to proper SQL literals
+    // this will correctly fail for floating point literals
+    <num:NumericLiteral> => <>.parse::<usize>().unwrap(),
 };
 
-BinaryType: () = {
-    "BINARY" LengthSpecification? => (),
-    "VARYING" "BINARY" LengthSpecification => (),
-    "VARBINARY" LengthSpecification => (),
+BinaryType: ast::DataType = {
+    "BINARY" <length: LengthSpecification?> => ast::DataType::Binary(length.unwrap_or(1)),
+    "VARYING" "BINARY" <length: LengthSpecification> => ast::DataType::VarBinary(length),
+    "VARBINARY" <length: LengthSpecification> => ast::DataType::VarBinary(length),
 };
 
-LogicalType: () = {
-    "BIT" LengthSpecification? => (),
-    "VARYING" "BIT" LengthSpecification => (),
-    Boolean => (),
+LogicalType: ast::DataType = {
+    // Apparently bit strings are no longer part of newer versions the standard
+    //"BIT" LengthSpecification? => (),
+    //"VARYING" "BIT" LengthSpecification => (),
+    Boolean => ast::DataType::Boolean,
 };
 
-NumericType = {
+NumericType: ast::DataType = {
     ExactNumericType,
     ApproximateNumericType,
 };
 
-ExactNumericType: () = {
-    "NUMERIC" PrecisionSpecification? => (),
-    Decimal PrecisionSpecification? => (),
-    Integer => (),
-    "SMALLINT" => (),
+ExactNumericType: ast::DataType = {
+    "NUMERIC" <prec: PrecisionSpecification?> => ast::DataType::Numeric(prec.unwrap_or(ast::DEFAULT_NUMERIC_PRECISION)),
+    Decimal <prec: PrecisionSpecification?> => ast::DataType::Numeric(prec.unwrap_or(ast::DEFAULT_DECIMAL_PRECISION)),
+    Integer => ast::DataType::Decimal(ast::INTEGER_NUMERIC_PRECISION),
+    "SMALLINT" => ast::DataType::Decimal(ast::SMALLINT_DECIMAL_PRECISION),
 };
 
-ApproximateNumericType: () = {
-    "FLOAT" FractionSpecification? => (),
-    "REAL" => (),
-    "DOUBLE" "PRECISION" => (),
+ApproximateNumericType: ast::DataType = {
+    "FLOAT" <frac: FractionSpecification?> => ast::DataType::Float(frac.unwrap_or(ast::DEFAULT_FLOAT_MANTISSA)),
+    "REAL" => ast::DataType::Float(ast::DEFAULT_REAL_MANTISSA),
+    "DOUBLE" "PRECISION" => ast::DataType::Float(ast::DEFAULT_DOUBLE_PRECISION_MANTISSA),
 };
 
-PrecisionSpecification: () = {
-    "(" IntegerLiteral ")" => (),
-    "(" IntegerLiteral "," IntegerLiteral ")" => (),
+PrecisionSpecification: ast::PrecisionSpecification = {
+    "(" <digits: IntegerLiteral> ")" => ast::PrecisionSpecification { digits, fractions: 0 },
+    "(" <digits: IntegerLiteral> "," <fractions:IntegerLiteral> ")" => ast::PrecisionSpecification { digits, fractions: 0 },
 };
 
-GeometryType: () = {
-    "ST_GEOGRAPHY" LengthSpecification => (),
-    "ST_GEOMETRY" LengthSpecification => (),
+GeometryType: ast::DataType = {
+    "ST_GEOGRAPHY" <length: LengthSpecification> => ast::DataType::Geography(length),
+    "ST_GEOMETRY" <length: LengthSpecification> => ast::DataType::Geometry(length),
 };
 
-DateTimeType: () = {
-    "DATE" => (),
-    "TIME" FractionSpecification? WithTimeZone? => (),
-    "TIMESTAMP" FractionSpecification? WithTimeZone? => (),
-    IntervalType => (),
+DateTimeType: ast::DataType = {
+    "DATE" => ast::DataType::Date,
+    "TIME" => ast::DataType::Time,
+    "TIMESTAMP" => ast::DataType::Timestamp,
+    <interval: IntervalType> => ast::DataType::Interval(interval),
 };
 
-WithTimeZone = {
-    "WITH" "TIME" "ZONE",
+IntervalType: ast::IntervalType = {
+    "INTERVAL" <unit:IntervalUnit> <prec: PrecisionSpecification?> => 
+        ast::IntervalType { 
+            from: ast::IntervalBound(unit, prec.unwrap_or_else(|| unit.default_precision())), 
+            to: None 
+        },
+    "INTERVAL" <from_unit: IntervalUnit> <from_prec: PrecisionSpecification?> 
+        "TO" <to_unit: IntervalUnit> <to_prec: PrecisionSpecification?> =>
+        ast::IntervalType { 
+            from: ast::IntervalBound(from_unit, from_prec.unwrap_or_else(|| from_unit.default_precision())), 
+            to: Some(ast::IntervalBound(to_unit, to_prec.unwrap_or_else(|| to_unit.default_precision()))), 
+        },
 };
 
-IntervalType: () = {
-    "INTERVAL" IntervalUnit PrecisionSpecification? => (),
-    "INTERVAL" IntervalUnit PrecisionSpecification "TO" IntervalUnit PrecisionSpecification? => (),
-};
-
-IntervalUnit = {
-    "YEAR",
-    "MONTH",
-    "DAY",
-    "HOUR",
-    "MINUTE",
-    "SECOND",
+IntervalUnit: ast::IntervalUnit = {
+    "YEAR" => ast::IntervalUnit::Year,
+    "MONTH" => ast::IntervalUnit::Month,
+    "DAY" => ast::IntervalUnit::Day,
+    "HOUR" => ast::IntervalUnit::Hour,
+    "MINUTE" => ast::IntervalUnit::Minute,
+    "SECOND" => ast::IntervalUnit::Second,
 };
 
 //

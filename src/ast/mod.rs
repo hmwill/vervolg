@@ -87,6 +87,102 @@ pub struct DropTableStatement { }
 pub struct CreateViewStatement { }
 pub struct DropViewStatement { }
 
+/// Units assicated with interval types
+#[derive(Clone, Copy, Debug)]
+pub enum IntervalUnit {
+    Second,
+    Minute,
+    Hour,
+    Day,
+    Month,
+    Year
+}
+
+impl IntervalUnit {
+    pub fn default_precision(self: &Self) -> PrecisionSpecification {
+        match self {
+            IntervalUnit::Second => PrecisionSpecification { digits: 2, fractions: 0 },
+            IntervalUnit::Minute => PrecisionSpecification { digits: 2, fractions: 0 },
+            IntervalUnit::Hour   => PrecisionSpecification { digits: 2, fractions: 0 },
+            IntervalUnit::Day    => PrecisionSpecification { digits: 2, fractions: 0 },
+            IntervalUnit::Month  => PrecisionSpecification { digits: 2, fractions: 0 },
+            IntervalUnit::Year   => PrecisionSpecification { digits: 4, fractions: 0 },
+        }
+    }
+}
+
+/// Representation of digits . fractions
+pub struct PrecisionSpecification {
+    pub digits: usize,
+    pub fractions: usize,
+}
+
+/// Specification of one end of and interval type specification
+pub struct IntervalBound(pub IntervalUnit, pub PrecisionSpecification);
+
+/// Representation of an interval type
+pub struct IntervalType {
+    pub from: IntervalBound,
+    pub to: Option<IntervalBound>
+}
+
+/// Minimum required decimal digits for an INTEGER value, will round to 32 bit
+pub const DECIMAL_INTEGER_DIGITS: usize = 9;
+
+/// Minimum required decimal digits for a SMALLINT value, will round to 32 bit
+pub const DECIMAL_SMALLINT_DIGITS: usize = 4;
+
+pub const DEFAULT_NUMERIC_PRECISION: PrecisionSpecification = 
+    PrecisionSpecification {
+        digits: DECIMAL_INTEGER_DIGITS, 
+        fractions: 0
+    };
+
+pub const DEFAULT_DECIMAL_PRECISION: PrecisionSpecification = 
+    PrecisionSpecification {
+        digits: DECIMAL_INTEGER_DIGITS, 
+        fractions: 0
+    };
+
+pub const INTEGER_NUMERIC_PRECISION: PrecisionSpecification = 
+    PrecisionSpecification {
+        digits: DECIMAL_INTEGER_DIGITS, 
+        fractions: 0
+    };
+
+pub const SMALLINT_DECIMAL_PRECISION: PrecisionSpecification = 
+    PrecisionSpecification {
+        digits: DECIMAL_SMALLINT_DIGITS, 
+        fractions: 0
+    };
+
+/// Minimum required mantissa bits for a FLOAT value; corresponds to 32-bit IEEE float
+pub const DEFAULT_FLOAT_MANTISSA: usize = 24;
+
+/// Minimum required mantissa bits for a REAL value; corresponds to 32-bit IEEE float
+pub const DEFAULT_REAL_MANTISSA: usize = DEFAULT_FLOAT_MANTISSA;
+
+/// Minimum required mantissa bits for a DOUBLE PRECISION value; corresponds to 64-bit IEEE float
+pub const DEFAULT_DOUBLE_PRECISION_MANTISSA: usize = 54;
+
+/// Reresentation of a SQL data type
+pub enum DataType {
+    Boolean,
+    Binary(usize),
+    VarBinary(usize),
+    Char(usize),
+    VarChar(usize),
+    Decimal(PrecisionSpecification),
+    Numeric(PrecisionSpecification),
+    Float(usize),
+    Date,
+    Time,
+    Timestamp,
+    Interval(IntervalType),
+    Geometry(usize),
+    Geography(usize),
+}
+
 /// Representation of an insert statement
 pub struct InsertStatement {
     /// the name of the table into which we want to insert new values
