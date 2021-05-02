@@ -275,25 +275,35 @@ Statement: ast::Statement = {
 //
 
 CreateSchemaStatement: ast::CreateSchemaStatement = {
-    "CREATE" "SCHEMA" Identifier AuthorizationUser? DefaultCharacterSetName? => ast::CreateSchemaStatement { },
-    "CREATE" "SCHEMA" AuthorizationUser DefaultCharacterSetName? => ast::CreateSchemaStatement { },
+    "CREATE" "SCHEMA" <name: Identifier> <authorization_user: AuthorizationUser?> <default_character_set: DefaultCharacterSetName?> 
+        => ast::CreateSchemaStatement { 
+            name,
+            authorization_user,
+            default_character_set
+        },
+    "CREATE" "SCHEMA" <authorization_user: AuthorizationUser> <default_character_set: DefaultCharacterSetName?> 
+        => ast::CreateSchemaStatement { 
+            name: authorization_user.clone(),
+            authorization_user: Some(authorization_user),
+            default_character_set
+        },
 };
 
-AuthorizationUser = {
-    "AUTHORIZATION" UserName,
+AuthorizationUser: symbols::Name = {
+    "AUTHORIZATION" <name: UserName> => name,
 };
 
-DefaultCharacterSetName = {
-    "DEFAULT" "CHARACTER" "SET" CharacterSetName,
+DefaultCharacterSetName: symbols::Name = {
+    "DEFAULT" "CHARACTER" "SET" <name: CharacterSetName> => name,
 };
 
 DropSchemaStatement: ast::DropSchemaStatement = {
-    "DROP" "SCHEMA" Identifier DropMode => ast::DropSchemaStatement { },
+    "DROP" "SCHEMA" <name: Identifier> <drop_mode: DropMode> => ast::DropSchemaStatement { name, drop_mode },
 };
 
-DropMode = {
-    "RESTRICT",
-    "CASCADE",
+DropMode: ast::DropMode = {
+    "RESTRICT" => ast::DropMode::Restrict,
+    "CASCADE" => ast::DropMode::Cascade,
 };
 
 CreateDomainStatement: ast::CreateDomainStatement = {

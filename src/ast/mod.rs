@@ -77,8 +77,22 @@ pub struct AlterDomainStatement { }
 pub struct CreateDomainStatement { }
 pub struct DropDomainStatement { }
 
-pub struct CreateSchemaStatement { }
-pub struct DropSchemaStatement { }
+pub struct CreateSchemaStatement { 
+    pub name: symbols::Name,
+    pub authorization_user: Option<symbols::Name>,
+    pub default_character_set: Option<symbols::Name>
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DropMode {
+    Restrict,
+    Cascade
+}
+
+pub struct DropSchemaStatement { 
+    pub name: symbols::Name,
+    pub drop_mode: DropMode,
+}
 
 pub struct AlterTableStatement { }
 pub struct CreateTableStatement { }
