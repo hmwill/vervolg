@@ -461,6 +461,10 @@ DropViewStatement: ast::DropViewStatement = {
     "DROP" "VIEW" ViewName DropMode => ast::DropViewStatement { },
 };
 
+//
+// Data Types
+//
+
 DataType: ast::DataType = {
     CharacterType,
     BinaryType,
