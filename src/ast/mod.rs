@@ -73,14 +73,44 @@ pub enum Statement {
     DropView(DropViewStatement),
 }
 
-pub struct AlterDomainStatement { }
-pub struct CreateDomainStatement { }
-pub struct DropDomainStatement { }
+pub struct QualifiedName {
+    pub schema: Option<symbols::Name>,
+    pub name: symbols::Name,
+}
+
+pub struct CheckConstraint {
+    pub name: Option<QualifiedName>,
+    pub condition: Box<Expression>,
+}
+
+pub struct AlterDomainStatement { 
+    pub name: QualifiedName,
+    pub action: AlterDomainAction
+}
+
+pub enum AlterDomainAction {
+    SetDefault(Literal),
+    DropDefault,
+    AddConstraint(CheckConstraint),
+    DropConstraint(QualifiedName),
+}
+
+pub struct CreateDomainStatement { 
+    pub name: QualifiedName,
+    pub data_type: DataType,
+    pub default: Option<Literal>,
+    pub constraints: Vec<CheckConstraint>,
+}
+
+pub struct DropDomainStatement { 
+    pub name: QualifiedName,
+    pub drop_mode: DropMode
+}
 
 pub struct CreateSchemaStatement { 
     pub name: symbols::Name,
     pub authorization_user: Option<symbols::Name>,
-    pub default_character_set: Option<symbols::Name>
+    pub default_character_set: Option<QualifiedName>
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -94,12 +124,25 @@ pub struct DropSchemaStatement {
     pub drop_mode: DropMode,
 }
 
-pub struct AlterTableStatement { }
-pub struct CreateTableStatement { }
-pub struct DropTableStatement { }
+pub struct AlterTableStatement { 
 
-pub struct CreateViewStatement { }
-pub struct DropViewStatement { }
+}
+
+pub struct CreateTableStatement { 
+
+}
+
+pub struct DropTableStatement { 
+
+}
+
+pub struct CreateViewStatement { 
+
+}
+
+pub struct DropViewStatement { 
+
+}
 
 /// Units assicated with interval types
 #[derive(Clone, Copy, Debug)]

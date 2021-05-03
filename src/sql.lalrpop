@@ -214,28 +214,28 @@ NameQualifier: symbols::Name = {
     <schema: SchemaName> "." => schema,
 };
 
-CharacterSetName: symbols::Name = {
-    NameQualifier? <character_set: Identifier> => character_set,
+CharacterSetName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
-TableName: symbols::Name = {
-    NameQualifier? <table: Identifier> => table,
+TableName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
-DomainName: symbols::Name = {
-    NameQualifier? <domain: Identifier> => domain,
+DomainName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
-ConstraintName: symbols::Name = {
-    NameQualifier? <constraint: Identifier> => constraint,
+ConstraintName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
-ViewName: symbols::Name = {
-    NameQualifier? <view: Identifier> => view,
+ViewName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
-TableOrViewName: symbols::Name = {
-    NameQualifier? <table_or_view: Identifier> => table_or_view,
+TableOrViewName: ast::QualifiedName = {
+    <schema: NameQualifier?> <name: Identifier> => ast::QualifiedName { schema, name },
 };
 
 //
@@ -293,7 +293,7 @@ AuthorizationUser: symbols::Name = {
     "AUTHORIZATION" <name: UserName> => name,
 };
 
-DefaultCharacterSetName: symbols::Name = {
+DefaultCharacterSetName: ast::QualifiedName = {
     "DEFAULT" "CHARACTER" "SET" <name: CharacterSetName> => name,
 };
 
@@ -307,52 +307,57 @@ DropMode: ast::DropMode = {
 };
 
 CreateDomainStatement: ast::CreateDomainStatement = {
-    "CREATE" "DOMAIN" DomainName "AS"? DataType DefaultDefinition? 
-        DomainConstraintDefinitionList?
-        => ast::CreateDomainStatement { },
+    "CREATE" "DOMAIN" <name: DomainName> "AS"? <data_type: DataType> <default: DefaultDefinition?> 
+        <constraints: DomainConstraintDefinitionList>
+        => ast::CreateDomainStatement { 
+            name,
+            data_type,
+            default,
+            constraints
+        },
 };
 
-DefaultDefinition = {
-    "DEFAULT" DefaultValue,
+DefaultDefinition: ast::Literal = {
+    "DEFAULT" <default: DefaultValue> => default,
 };
 
-DefaultValue = {
+DefaultValue: ast::Literal = {
     NumericLiteral => ast::Literal::NumericLiteral(<>),
     StringLiteral => ast::Literal::StringLiteral(<>),
     "NULL" => ast::Literal::Null,
     NiladicFunction,
 };
 
-DomainConstraintDefinitionList: () = {
-    DomainConstraintDefinition => (),
-    <l: DomainConstraintDefinitionList> <d:DomainConstraintDefinition> => (),
+DomainConstraintDefinitionList: Vec<ast::CheckConstraint> = {
+    DomainConstraintDefinition*,
 };
 
-DomainConstraintDefinition: () = {
-    NamedConstraint? "CHECK" "(" ConditionalExpression ")" => (),
+DomainConstraintDefinition: ast::CheckConstraint = {
+    <name: NamedConstraint?> "CHECK" "(" <condition: ConditionalExpression> ")" 
+        => ast::CheckConstraint { name, condition },
 };
 
-ConditionalExpression: () = {
-    Expression => (),
+ConditionalExpression: Box<ast::Expression> = {
+    Expression,
 };
 
-NamedConstraint: () = {
-    "CONSTRAINT" ConstraintName => (),
+NamedConstraint: ast::QualifiedName = {
+    "CONSTRAINT" <name: ConstraintName> => name,
 };
 
 AlterDomainStatement: ast::AlterDomainStatement = {
-    "ALTER" "DOMAIN" DomainName DomainAlterationAction => ast::AlterDomainStatement { },
+    "ALTER" "DOMAIN" <name: DomainName> <action: DomainAlterationAction> => ast::AlterDomainStatement { name, action },
 };
 
-DomainAlterationAction: () = {
-    "SET" DefaultDefinition => (),
-    "DROP" "DEFAULT" => (),
-    "ADD" DomainConstraintDefinition => (),
-    "DROP" "CONSTRAINT" ConstraintName => (),
+DomainAlterationAction: ast::AlterDomainAction = {
+    "SET" <default: DefaultDefinition> => ast::AlterDomainAction::SetDefault(default),
+    "DROP" "DEFAULT" => ast::AlterDomainAction::DropDefault,
+    "ADD" <constraint: DomainConstraintDefinition> => ast::AlterDomainAction::AddConstraint(constraint),
+    "DROP" "CONSTRAINT" <name: ConstraintName> => ast::AlterDomainAction::DropConstraint(name),
 };
 
 DropDomainStatement: ast::DropDomainStatement = {
-    "DROP" "DOMAIN" DomainName DropMode => ast::DropDomainStatement { },
+    "DROP" "DOMAIN" <name: DomainName> <drop_mode: DropMode> => ast::DropDomainStatement { name, drop_mode },
 };
 
 AlterTableStatement: ast::AlterTableStatement = {
