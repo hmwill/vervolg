@@ -361,119 +361,162 @@ DropDomainStatement: ast::DropDomainStatement = {
 };
 
 AlterTableStatement: ast::AlterTableStatement = {
-    "ALTER" "TABLE" TableName TableAlterationAction => ast::AlterTableStatement { },
+    "ALTER" "TABLE" <name: TableName> <action: TableAlterationAction> => ast::AlterTableStatement { name, action },
 };
 
-TableAlterationAction = {
-    TableColummnAlterationAction,
+TableAlterationAction: ast::AlterTableAction = {
+    TableColumnAlterationAction,
     TableConstraintAlterationAction,
 };
 
-TableColummnAlterationAction: () = {
-    "ADD" "COLUMN"? ColumnDefinition => (),
-    "ALTER" "COLUMN"? Identifier "SET" DefaultDefinition => (),
-    "ALTER" "COLUMN"? Identifier "DROP" "DEFAULT" => (),
-    "DROP" "COLUMN"? Identifier DropMode => (),
+TableColumnAlterationAction: ast::AlterTableAction = {
+    "ADD" "COLUMN"? <column: ColumnDefinition> => ast::AlterTableAction::AddColumn(column),
+    "ALTER" "COLUMN"? <name: Identifier> "SET" <default: DefaultDefinition> => ast::AlterTableAction::SetColumnDefault { name, default },
+    "ALTER" "COLUMN"? <name: Identifier> "DROP" "DEFAULT" => ast::AlterTableAction::DropColumnDefault(name),
+    "DROP" "COLUMN"? <name: Identifier> <drop_mode: DropMode> => ast::AlterTableAction::DropColumn { name, drop_mode },
 };
 
-TableConstraintAlterationAction: () = {
-    "ADD" TableConstraintDefinition => (),
-    "DROP" "CONSTRAINT" ConstraintName DropMode => (),
+TableConstraintAlterationAction: ast::AlterTableAction = {
+    "ADD" <constraint: TableConstraintKind> => ast::AlterTableAction::AddConstraint(constraint),
+    "DROP" "CONSTRAINT" <name: ConstraintName> <drop_mode: DropMode> => ast::AlterTableAction::DropConstraint { name, drop_mode },
 };
 
 CreateTableStatement: ast::CreateTableStatement = {
-    "CREATE" "TABLE" TableName BaseTableElementCommaList => ast::CreateTableStatement { },
+    "CREATE" "TABLE" <name: TableName> <columns_constraints: BaseTableElementCommaList> 
+        => {
+            let (columns, constraints) = columns_constraints;
+            ast::CreateTableStatement { name, columns, constraints }   
+        },
 };
 
-BaseTableElementCommaList: () = {
-    BaseTableElement => (),
-    BaseTableElementCommaList "," BaseTableElement => (),
+BaseTableElementCommaList: (Vec<ast::ColumnDefinition>, Vec<ast::TableConstraint>) = {
+    <column: ColumnDefinition> => (vec![column], vec![]),
+    <constraint: TableConstraintKind> => (vec![], vec![constraint]),
+    <columns_constraints: BaseTableElementCommaList> "," <column: ColumnDefinition> 
+        => {
+            let (mut columns, constraints) = columns_constraints;
+            columns.push(column);
+            (columns, constraints)
+        },
+    <columns_constraints: BaseTableElementCommaList> "," <constraint: TableConstraintKind> 
+        => {
+            let (columns, mut constraints) = columns_constraints;
+            constraints.push(constraint);
+            (columns, constraints)
+        },
 };
 
-BaseTableElement: () = {
-    ColumnDefinition => (),
-    TableConstraintDefinition => (),
+ColumnDefinition: ast::ColumnDefinition = {
+    <name: Identifier> <data_type: DataType> <default: DefaultDefinition?> <constraints: ColumnConstraintDefinitionList> 
+        => ast::ColumnDefinition {
+            name,
+            column_type: ast::ColumnType::DataType(data_type),
+            default,
+            constraints
+        },
+        <name: Identifier> <domain_name: DomainName> <default: DefaultDefinition?> <constraints: ColumnConstraintDefinitionList> 
+        => ast::ColumnDefinition {
+            name,
+            column_type: ast::ColumnType::Domain(domain_name),
+            default,
+            constraints
+        },
 };
 
-ColumnDefinition: () = {
-    <column: Identifier> DataType DefaultDefinition? ColumnConstraintDefinitionList? => (),
-    <column: Identifier> DomainName DefaultDefinition? ColumnConstraintDefinitionList? => (),
+ColumnConstraintDefinitionList: Vec<ast::ColumnConstraint> = {
+    ColumnConstraintDefinition*,
 };
 
-ColumnConstraintDefinitionList: () = {
-    ColumnConstraintDefinition => (),
-    ColumnConstraintDefinitionList ColumnConstraintDefinition => (),
+ColumnConstraintDefinition: ast::ColumnConstraint = {
+    <name: NamedConstraint?> "NOT" "NULL" 
+        => ast::ColumnConstraint { name, constraint: ast::ColumnConstraintKind::NotNull },
+    <name: NamedConstraint?> "PRIMARY" "KEY" 
+        => ast::ColumnConstraint { name, constraint: ast::ColumnConstraintKind::PrimaryKey },
+    <name: NamedConstraint?> "UNIQUE" 
+        => ast::ColumnConstraint { name, constraint: ast::ColumnConstraintKind::Unique },
+    <name: NamedConstraint?> <reference: ReferencesDef> 
+        => ast::ColumnConstraint { name, constraint: ast::ColumnConstraintKind::References(reference) },
+    <name: NamedConstraint?> "CHECK" "(" <condition: ConditionalExpression> ")" 
+        => ast::ColumnConstraint { name, constraint: ast::ColumnConstraintKind::Check(condition) },
 };
 
-ColumnConstraintDefinition: () = {
-    NamedConstraint? "NOT" "NULL" => (),
-    NamedConstraint? "PRIMARY" "KEY" => (),
-    NamedConstraint? "UNIQUE" => (),
-    NamedConstraint? ReferencesDef => (), 
-    NamedConstraint? "CHECK" "(" ConditionalExpression ")" => (),
+ReferencesDef: ast::Reference = {
+    "REFERENCES" <table: TableName> <columns: ColumnNameList?> <match_mode: MatchMode?> <on_delete: OnDeleteAction?> <on_update: OnUpdateAction?> 
+        => ast::Reference {
+            table,
+            columns,
+            match_mode,
+            on_update,
+            on_delete
+        },
 };
 
-ReferencesDef: () = {
-    "REFERENCES" TableName ColumnNameList? MatchMode? OnDeleteAction? OnUpdateAction? => (),
+MatchMode: ast::MatchMode = {
+    "MATCH" "FULL" => ast::MatchMode::Full,
+    "MATCH" "PARTIAL" => ast::MatchMode::Partial,
 };
 
-MatchMode = {
-    "MATCH" "FULL",
-    "MATCH" "PARTIAL",
+OnDeleteAction: ast::ReferentialAction = {
+    "ON" "DELETE" <action: ReferentialAction> => action,
 };
 
-OnDeleteAction = {
-    "ON" "DELETE" ReferentialAction,
+OnUpdateAction: ast::ReferentialAction = {
+    "ON" "UPDATE" <action: ReferentialAction> => action,
 };
 
-OnUpdateAction = {
-    "ON" "UPDATE" ReferentialAction,
+ReferentialAction: ast::ReferentialAction = {
+    "NO" "ACTION" => ast::ReferentialAction::NoAction,
+    "CASCADE" => ast::ReferentialAction::Cascade,
+    "SET" "DEFAULT" => ast::ReferentialAction::SetDefault,
+    "SET" "NULL" => ast::ReferentialAction::SetNull,
 };
 
-ReferentialAction: () = {
-    "NO" "ACTION" => (),
-    "CASCADE" => (),
-    "SET" "DEFAULT" => (),
-    "SET" "NULL" => (),
+TableConstraintKind: ast::TableConstraint = {
+    <name: NamedConstraint?> <constraint: UniqueKeyDef> => ast::TableConstraint { name, constraint },
+    <name: NamedConstraint?> <constraint: PrimaryKeyDef> => ast::TableConstraint { name, constraint },
+    <name: NamedConstraint?> <constraint: ForeignKeyDef> => ast::TableConstraint { name, constraint },
+    <name: NamedConstraint?> <constraint: CheckConstraintDef> => ast::TableConstraint { name, constraint },
 };
 
-TableConstraintDefinition: () = {
-    NamedConstraint? CandidiateKeyDef,
-    NamedConstraint? ForeignKeyDef,
-    NamedConstraint? CheckConstraintDef,
+UniqueKeyDef: ast::TableConstraintKind = {
+    "UNIQUE" <columns: ColumnNameList> => ast::TableConstraintKind::Unique(columns),
 };
 
-CandidiateKeyDef: () = {
-    "PRIMARY" "KEY" ColumnNameList => (),
-    "UNIQUE" ColumnNameList => (),
+PrimaryKeyDef: ast::TableConstraintKind = {
+    "PRIMARY" "KEY" <columns: ColumnNameList> => ast::TableConstraintKind::PrimaryKey(columns),
 };
 
-ForeignKeyDef: () = {
-    "FOREIGN" "KEY" ColumnNameList 
-        ReferencesDef 
-        => (),
+ForeignKeyDef: ast::TableConstraintKind = {
+    "FOREIGN" "KEY" <columns: ColumnNameList> <reference: ReferencesDef> 
+        => ast::TableConstraintKind::ForeignKey { columns, reference },
 };
 
-CheckConstraintDef: () = {
-    "CHECK" "(" ConditionalExpression ")" => (),
+CheckConstraintDef: ast::TableConstraintKind = {
+    "CHECK" "(" <condition: ConditionalExpression> ")" => ast::TableConstraintKind::Check(condition),
 };
 
 DropTableStatement: ast::DropTableStatement = {
-    "DROP" "TABLE" TableName DropMode => ast::DropTableStatement { },
+    "DROP" "TABLE" <name: TableName> <drop_mode: DropMode> => ast::DropTableStatement { name, drop_mode },
 };
 
 CreateViewStatement: ast::CreateViewStatement = {
-    "CREATE" "VIEW" ViewName ColumnNameList?
-        "AS" TableExpression CreateViewOptions? => ast::CreateViewStatement { },
+    "CREATE" "VIEW" <name: ViewName> <columns: ColumnNameList?>
+        "AS" <expression: TableExpression> <view_check_option: CreateViewOption?> 
+        => ast::CreateViewStatement { 
+            name,
+            columns,
+            expression,
+            view_check_option
+        },
 };
 
-CreateViewOptions = {
-    "WITH" "CASCADED" "CHECK" "OPTION",
-    "WITH" "LOCAL" "CHECK" "OPTION",
+CreateViewOption: ast::ViewCheckOption = {
+    "WITH" "CASCADED"? "CHECK" "OPTION" => ast::ViewCheckOption::Cascaded,
+    "WITH" "LOCAL" "CHECK" "OPTION" => ast::ViewCheckOption::Local,
 };
 
 DropViewStatement: ast::DropViewStatement = {
-    "DROP" "VIEW" ViewName DropMode => ast::DropViewStatement { },
+    "DROP" "VIEW" <name: ViewName> <drop_mode: DropMode> => ast::DropViewStatement { name, drop_mode },
 };
 
 //

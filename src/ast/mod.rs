@@ -125,23 +125,105 @@ pub struct DropSchemaStatement {
 }
 
 pub struct AlterTableStatement { 
+    pub name: QualifiedName,
+    pub action: AlterTableAction,
+}
 
+pub enum AlterTableAction {
+    AddColumn(ColumnDefinition),
+    DropColumn { name: symbols::Name, drop_mode: DropMode },
+    SetColumnDefault { name: symbols::Name, default: Literal },
+    DropColumnDefault(symbols::Name),
+    AddConstraint(TableConstraint),
+    DropConstraint { name: QualifiedName, drop_mode: DropMode },
 }
 
 pub struct CreateTableStatement { 
+    pub name: QualifiedName,
+    pub columns: Vec<ColumnDefinition>,
+    pub constraints: Vec<TableConstraint>,
+}
 
+pub struct ColumnDefinition {
+    pub name: symbols::Name,
+    pub column_type: ColumnType,
+    pub default: Option<Literal>,
+    pub constraints: Vec<ColumnConstraint>,
+}
+
+pub enum ColumnType {
+    DataType(DataType),
+    Domain(QualifiedName),
+}
+
+pub struct ColumnConstraint {
+    pub name: Option<QualifiedName>,
+    pub constraint: ColumnConstraintKind,
+}
+
+pub enum ColumnConstraintKind {
+    NotNull,
+    PrimaryKey,
+    Unique,
+    References(Reference),
+    Check(Box<Expression>),
+}
+
+pub struct TableConstraint {
+    pub name: Option<QualifiedName>,
+    pub constraint: TableConstraintKind,
+}
+
+pub enum TableConstraintKind {
+    Unique(Vec<symbols::Name>),
+    PrimaryKey(Vec<symbols::Name>),
+    ForeignKey { columns: Vec<symbols::Name>, reference: Reference },
+    Check(Box<Expression>),
+}
+
+pub struct Reference {
+    pub table: QualifiedName,
+    pub columns: Option<Vec<symbols::Name>>,
+    pub match_mode: Option<MatchMode>,
+    pub on_update: Option<ReferentialAction>,
+    pub on_delete: Option<ReferentialAction>
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ReferentialAction {
+    NoAction,
+    Cascade,
+    SetDefault,
+    SetNull
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum MatchMode {
+    Full,
+    Partial
 }
 
 pub struct DropTableStatement { 
-
+    pub name: QualifiedName,
+    pub drop_mode: DropMode
 }
 
 pub struct CreateViewStatement { 
+    pub name: QualifiedName,
+    pub columns: Option<Vec<symbols::Name>>,
+    pub expression: Box<TableExpression>,
+    pub view_check_option: Option<ViewCheckOption>
+}
 
+#[derive(Clone, Copy, Debug)]
+pub enum ViewCheckOption {
+    Cascaded,
+    Local
 }
 
 pub struct DropViewStatement { 
-
+    pub name: QualifiedName,
+    pub drop_mode: DropMode
 }
 
 /// Units assicated with interval types
