@@ -247,6 +247,20 @@ pub SqlStatement: ast::SqlStatement = {
     "EXPLAIN" ("QUERY" "PLAN")? <statement: Statement> => ast::SqlStatement::ExplainQueryPlan(statement),
     <statement: AttachStatement> => ast::SqlStatement::Attach(statement),
     <statement: DescribeStatement> => ast::SqlStatement::Describe(statement),
+
+    CreateSchemaStatement => ast::SqlStatement::CreateSchema(<>),
+    DropSchemaStatement => ast::SqlStatement::DropSchema(<>),
+
+    AlterDomainStatement => ast::SqlStatement::AlterDomain(<>),
+    CreateDomainStatement => ast::SqlStatement::CreateDomain(<>),
+    DropDomainStatement => ast::SqlStatement::DropDomain(<>),
+
+    AlterTableStatement => ast::SqlStatement::AlterTable(<>),
+    CreateTableStatement => ast::SqlStatement::CreateTable(<>),
+    DropTableStatement => ast::SqlStatement::DropTable(<>),
+
+    CreateViewStatement => ast::SqlStatement::CreateView(<>),
+    DropViewStatement => ast::SqlStatement::DropView(<>),
 };
 
 Statement: ast::Statement = {
@@ -254,20 +268,6 @@ Statement: ast::Statement = {
     InsertStatement => ast::Statement::Insert(<>),
     DeleteStatement => ast::Statement::Delete(<>),
     UpdateStatement => ast::Statement::Update(<>),
-
-    CreateSchemaStatement => ast::Statement::CreateSchema(<>),
-    DropSchemaStatement => ast::Statement::DropSchema(<>),
-
-    AlterDomainStatement => ast::Statement::AlterDomain(<>),
-    CreateDomainStatement => ast::Statement::CreateDomain(<>),
-    DropDomainStatement => ast::Statement::DropDomain(<>),
-
-    AlterTableStatement => ast::Statement::AlterTable(<>),
-    CreateTableStatement => ast::Statement::CreateTable(<>),
-    DropTableStatement => ast::Statement::DropTable(<>),
-
-    CreateViewStatement => ast::Statement::CreateView(<>),
-    DropViewStatement => ast::Statement::DropView(<>),
 };
 
 //

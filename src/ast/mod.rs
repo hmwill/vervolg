@@ -21,8 +21,8 @@
 // SOFTWARE.
 
 use super::schema;
-use super::types;
 use super::symbols;
+use super::types;
 
 use std::borrow::Borrow;
 
@@ -50,202 +50,416 @@ pub enum SqlStatement {
 
     /// Describe a particular schema object
     Describe(DescribeStatement),
-}
 
-pub enum Statement {
-    Select(SelectStatement),
-    Insert(InsertStatement),
-    Delete(DeleteStatement),
-    Update(UpdateStatement),
-
+    /// `ALTER DOMAIN` statement
     AlterDomain(AlterDomainStatement),
+
+    /// `CREATE DOMAIN` statement
     CreateDomain(CreateDomainStatement),
+
+    /// `DROP DOMAIN` statement
     DropDomain(DropDomainStatement),
 
+    /// `CREATE SCHEMA` statement
     CreateSchema(CreateSchemaStatement),
+
+    /// `DROP SCHEMA` statement
     DropSchema(DropSchemaStatement),
 
+    /// `ALTER TABLE` statement
     AlterTable(AlterTableStatement),
+
+    /// `CREATE TABLE` statement
     CreateTable(CreateTableStatement),
+
+    /// `DROP TABLE` statement
     DropTable(DropTableStatement),
 
+    /// `CREATE VIEW` statememt
     CreateView(CreateViewStatement),
+
+    /// `DROP VIEW` statement
     DropView(DropViewStatement),
 }
 
+/// A simple SQL statement that has an associated query plan
+pub enum Statement {
+    /// `SELECT` statememt
+    Select(SelectStatement),
+
+    /// `INSERT` statement
+    Insert(InsertStatement),
+
+    /// `DELETE` statement
+    Delete(DeleteStatement),
+
+    /// `UPDATE` statement
+    Update(UpdateStatement),
+}
+
+/// Qualified names comprise the object name and an optional schema name as namespace qualifier
 pub struct QualifiedName {
+    /// the optional name of the schema
     pub schema: Option<symbols::Name>,
+
+    /// the name of the object
     pub name: symbols::Name,
 }
 
+/// A constraint that is associated with a domain definition
 pub struct CheckConstraint {
+    /// an optional name for this constraint
     pub name: Option<QualifiedName>,
+
+    /// an expression that needs to evaluate to TRUE for all valid values of the associated domain
     pub condition: Box<Expression>,
 }
 
-pub struct AlterDomainStatement { 
+/// Representation of an `ALTER DOMAIN` statemenmt
+pub struct AlterDomainStatement {
+    /// the name of the domain to modify
     pub name: QualifiedName,
-    pub action: AlterDomainAction
+
+    /// the action to apply to the domain definition
+    pub action: AlterDomainAction,
 }
 
+/// Representation of the different alteration actions for domain definitions
 pub enum AlterDomainAction {
+    /// Specify a default value
     SetDefault(Literal),
+
+    /// Remove any previously defined default value
     DropDefault,
+
+    /// Add a constraint to check
     AddConstraint(CheckConstraint),
+
+    /// Remove a previously defined constraint identified by its name
     DropConstraint(QualifiedName),
 }
 
-pub struct CreateDomainStatement { 
+/// Representation of a `CREATE DOMAIN` statement
+pub struct CreateDomainStatement {
+    /// the name of the domain
     pub name: QualifiedName,
+
+    /// the underlying SQL data type used to represent domain values
     pub data_type: DataType,
+
+    /// a default value, if applicable
     pub default: Option<Literal>,
+
+    /// Additional invariants to hold for valid domain values
     pub constraints: Vec<CheckConstraint>,
 }
 
-pub struct DropDomainStatement { 
+/// Representation of a `DROP DOMAIN` statement
+pub struct DropDomainStatement {
+    /// the name of the domain
     pub name: QualifiedName,
-    pub drop_mode: DropMode
-}
 
-pub struct CreateSchemaStatement { 
-    pub name: symbols::Name,
-    pub authorization_user: Option<symbols::Name>,
-    pub default_character_set: Option<QualifiedName>
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum DropMode {
-    Restrict,
-    Cascade
-}
-
-pub struct DropSchemaStatement { 
-    pub name: symbols::Name,
+    /// the modality of the drop operation
     pub drop_mode: DropMode,
 }
 
-pub struct AlterTableStatement { 
+/// Representation of a `CREATE SCHEMA` statement
+pub struct CreateSchemaStatement {
+    /// the name of the schema
+    pub name: symbols::Name,
+
+    /// optionally, an associated auhtorization user. If NULL, the current user is implied
+    pub authorization_user: Option<symbols::Name>,
+
+    /// the name of the default character set to use within schema objects
+    pub default_character_set: Option<QualifiedName>,
+}
+
+#[derive(Clone, Copy, Debug)]
+/// Modality of excuting a `DROP` operation
+pub enum DropMode {
+    /// Don't drop if the schema object is still in use
+    Restrict,
+
+    /// Also delete all schema objects refering to the object to be deleted
+    Cascade,
+}
+
+/// Representation of a `DROP SCHEMA` operation
+pub struct DropSchemaStatement {
+    /// the name of the schema
+    pub name: symbols::Name,
+
+    /// the modality of the drop operation
+    pub drop_mode: DropMode,
+}
+
+/// Representation of an `ALTER TABLE` statement
+pub struct AlterTableStatement {
+    /// the name of the table to modify
     pub name: QualifiedName,
+
+    /// the alteration action to perform on the table
     pub action: AlterTableAction,
 }
 
+/// The different alteration actions to perform on a table
 pub enum AlterTableAction {
+    /// Add a new column to the table
     AddColumn(ColumnDefinition),
-    DropColumn { name: symbols::Name, drop_mode: DropMode },
-    SetColumnDefault { name: symbols::Name, default: Literal },
+
+    /// Drop a table column
+    DropColumn {
+        /// the name of the column to drop
+        name: symbols::Name,
+
+        /// the modality of the drop
+        drop_mode: DropMode,
+    },
+
+    /// Set a default value for the column
+    SetColumnDefault {
+        /// the name of the column
+        name: symbols::Name,
+
+        /// the new default value to set
+        default: Literal,
+    },
+
+    /// Remove a previously defined default value for a column with the provided name
     DropColumnDefault(symbols::Name),
+
+    /// Add a new constraint for the table
     AddConstraint(TableConstraint),
-    DropConstraint { name: QualifiedName, drop_mode: DropMode },
+
+    /// Remove a previously defined table constraint
+    DropConstraint {
+        /// the name of the constraint
+        name: QualifiedName,
+
+        /// the modality of dropping the constraint
+        drop_mode: DropMode,
+    },
 }
 
-pub struct CreateTableStatement { 
+/// Representation of a `CREATE TABLE` statement
+pub struct CreateTableStatement {
+    /// name of the table to create
     pub name: QualifiedName,
+
+    /// columns definitions for the new table
     pub columns: Vec<ColumnDefinition>,
+
+    /// table constraints for the new table
     pub constraints: Vec<TableConstraint>,
 }
 
+/// Representation of a new column to define in a table
 pub struct ColumnDefinition {
+    /// the name of the new column
     pub name: symbols::Name,
+
+    /// Either a built-in data type or a domain that has been previously defined
     pub column_type: ColumnType,
+
+    /// an optional default value
     pub default: Option<Literal>,
+
+    /// constraints to apply for validating column values
     pub constraints: Vec<ColumnConstraint>,
 }
 
+/// Discriminator type for the data type of a column
 pub enum ColumnType {
+    /// a built-in SQL data type
     DataType(DataType),
+
+    /// a previously defined domain
     Domain(QualifiedName),
 }
 
+/// Representation of a constraint on a column
 pub struct ColumnConstraint {
+    /// an optional constraint name
     pub name: Option<QualifiedName>,
+
+    /// the specific kind of constraint to apply
     pub constraint: ColumnConstraintKind,
 }
 
+/// Discriminator type for different forms of constraints on column values
 pub enum ColumnConstraintKind {
+    /// do not allow `NULL` values
     NotNull,
+
+    /// the column is part of the primary key of the table
     PrimaryKey,
+
+    /// non-null values in this column must be unique across rows
     Unique,
+
+    /// valid column values are references to another table
     References(Reference),
+
+    /// a general condition to enforce on column values
     Check(Box<Expression>),
 }
 
+/// Representation of a constraint on a table
 pub struct TableConstraint {
+    /// an optional constraint name
     pub name: Option<QualifiedName>,
+
+    /// the specific kind of constraint to apply
     pub constraint: TableConstraintKind,
 }
 
+/// Discriminator type for different forms of constraints on tables
 pub enum TableConstraintKind {
+    /// Uniqueness of column values
     Unique(Vec<symbols::Name>),
+
+    /// Primary key definition
     PrimaryKey(Vec<symbols::Name>),
-    ForeignKey { columns: Vec<symbols::Name>, reference: Reference },
+
+    /// Foreign key constraint refrencing another table
+    ForeignKey {
+        /// the list of columns that make up the foreign key
+        columns: Vec<symbols::Name>,
+
+        /// the table that is referenced
+        reference: Reference,
+    },
+
+    /// a general condition to enforce
     Check(Box<Expression>),
 }
 
+/// Description of a reference to another table
 pub struct Reference {
+    /// the name of the referenced table
     pub table: QualifiedName,
+
+    /// the columns referenced in the othr table
     pub columns: Option<Vec<symbols::Name>>,
+
+    /// the matching mode 
     pub match_mode: Option<MatchMode>,
+
+    /// referential integrity action to apply of the referenced item is updated
     pub on_update: Option<ReferentialAction>,
-    pub on_delete: Option<ReferentialAction>
+
+    /// referential integrity action to apply of the referenced item is deleted
+    pub on_delete: Option<ReferentialAction>,
 }
 
 #[derive(Clone, Copy, Debug)]
+/// referential integrity action alternatives when the referenced value is modified
 pub enum ReferentialAction {
+    /// Do nothing
     NoAction,
+
+    /// Cascade (especially deletes)
     Cascade,
+
+    /// Replace the reference with a default value
     SetDefault,
-    SetNull
+
+    /// Set the reference to a `NULL` value
+    SetNull,
 }
 
 #[derive(Clone, Copy, Debug)]
+/// Matching mode for references into another table
 pub enum MatchMode {
+    /// require a full match
     Full,
-    Partial
+
+    /// allow partial matches
+    Partial,
 }
 
-pub struct DropTableStatement { 
+/// Representation of a `DROP TABLE` statement
+pub struct DropTableStatement {
+    /// the name of the table to drop
     pub name: QualifiedName,
-    pub drop_mode: DropMode
+
+    /// the modality of the drop operation
+    pub drop_mode: DropMode,
 }
 
-pub struct CreateViewStatement { 
+/// Representation of a `CREATE VIEW` statement
+pub struct CreateViewStatement {
+    /// the name of the view to create
     pub name: QualifiedName,
+
+    /// the column names of the view if not implied by the table expression
     pub columns: Option<Vec<symbols::Name>>,
+
+    /// the expression to populate the view
     pub expression: Box<TableExpression>,
-    pub view_check_option: Option<ViewCheckOption>
+
+    /// How to apply constraints during data modifications via the view
+    pub view_check_option: Option<ViewCheckOption>,
 }
 
 #[derive(Clone, Copy, Debug)]
+/// Determine how modifications through the view get validated
 pub enum ViewCheckOption {
+    /// Cascade validation through all views down to the underlying base table
     Cascaded,
-    Local
+
+    /// Only verify that top-most set of constraints
+    Local,
 }
 
-pub struct DropViewStatement { 
+/// Representation of a `DROP VIEW` statement
+pub struct DropViewStatement {
+    /// the name of the view to drop
     pub name: QualifiedName,
-    pub drop_mode: DropMode
+
+    /// the modality of the drop operation
+    pub drop_mode: DropMode,
 }
 
-/// Units assicated with interval types
 #[derive(Clone, Copy, Debug)]
+/// Units assicated with interval types
 pub enum IntervalUnit {
     Second,
     Minute,
     Hour,
     Day,
     Month,
-    Year
+    Year,
 }
 
 impl IntervalUnit {
     pub fn default_precision(self: &Self) -> PrecisionSpecification {
         match self {
-            IntervalUnit::Second => PrecisionSpecification { digits: 2, fractions: 0 },
-            IntervalUnit::Minute => PrecisionSpecification { digits: 2, fractions: 0 },
-            IntervalUnit::Hour   => PrecisionSpecification { digits: 2, fractions: 0 },
-            IntervalUnit::Day    => PrecisionSpecification { digits: 2, fractions: 0 },
-            IntervalUnit::Month  => PrecisionSpecification { digits: 2, fractions: 0 },
-            IntervalUnit::Year   => PrecisionSpecification { digits: 4, fractions: 0 },
+            IntervalUnit::Second => PrecisionSpecification {
+                digits: 2,
+                fractions: 0,
+            },
+            IntervalUnit::Minute => PrecisionSpecification {
+                digits: 2,
+                fractions: 0,
+            },
+            IntervalUnit::Hour => PrecisionSpecification {
+                digits: 2,
+                fractions: 0,
+            },
+            IntervalUnit::Day => PrecisionSpecification {
+                digits: 2,
+                fractions: 0,
+            },
+            IntervalUnit::Month => PrecisionSpecification {
+                digits: 2,
+                fractions: 0,
+            },
+            IntervalUnit::Year => PrecisionSpecification {
+                digits: 4,
+                fractions: 0,
+            },
         }
     }
 }
@@ -262,7 +476,7 @@ pub struct IntervalBound(pub IntervalUnit, pub PrecisionSpecification);
 /// Representation of an interval type
 pub struct IntervalType {
     pub from: IntervalBound,
-    pub to: Option<IntervalBound>
+    pub to: Option<IntervalBound>,
 }
 
 /// Minimum required decimal digits for an INTEGER value, will round to 32 bit
@@ -271,29 +485,25 @@ pub const DECIMAL_INTEGER_DIGITS: usize = 9;
 /// Minimum required decimal digits for a SMALLINT value, will round to 32 bit
 pub const DECIMAL_SMALLINT_DIGITS: usize = 4;
 
-pub const DEFAULT_NUMERIC_PRECISION: PrecisionSpecification = 
-    PrecisionSpecification {
-        digits: DECIMAL_INTEGER_DIGITS, 
-        fractions: 0
-    };
+pub const DEFAULT_NUMERIC_PRECISION: PrecisionSpecification = PrecisionSpecification {
+    digits: DECIMAL_INTEGER_DIGITS,
+    fractions: 0,
+};
 
-pub const DEFAULT_DECIMAL_PRECISION: PrecisionSpecification = 
-    PrecisionSpecification {
-        digits: DECIMAL_INTEGER_DIGITS, 
-        fractions: 0
-    };
+pub const DEFAULT_DECIMAL_PRECISION: PrecisionSpecification = PrecisionSpecification {
+    digits: DECIMAL_INTEGER_DIGITS,
+    fractions: 0,
+};
 
-pub const INTEGER_NUMERIC_PRECISION: PrecisionSpecification = 
-    PrecisionSpecification {
-        digits: DECIMAL_INTEGER_DIGITS, 
-        fractions: 0
-    };
+pub const INTEGER_NUMERIC_PRECISION: PrecisionSpecification = PrecisionSpecification {
+    digits: DECIMAL_INTEGER_DIGITS,
+    fractions: 0,
+};
 
-pub const SMALLINT_DECIMAL_PRECISION: PrecisionSpecification = 
-    PrecisionSpecification {
-        digits: DECIMAL_SMALLINT_DIGITS, 
-        fractions: 0
-    };
+pub const SMALLINT_DECIMAL_PRECISION: PrecisionSpecification = PrecisionSpecification {
+    digits: DECIMAL_SMALLINT_DIGITS,
+    fractions: 0,
+};
 
 /// Minimum required mantissa bits for a FLOAT value; corresponds to 32-bit IEEE float
 pub const DEFAULT_FLOAT_MANTISSA: usize = 24;
@@ -306,19 +516,46 @@ pub const DEFAULT_DOUBLE_PRECISION_MANTISSA: usize = 54;
 
 /// Reresentation of a SQL data type
 pub enum DataType {
+    /// `BOOLEAN`
     Boolean,
+
+    /// `BINARY`
     Binary(usize),
+
+    /// `VARBINARY`
     VarBinary(usize),
+
+    /// `CHARACTER`
     Char(usize),
+
+    /// `VARCHAR`
     VarChar(usize),
+
+    /// `DECIMAL`
     Decimal(PrecisionSpecification),
+
+    /// `NUMERIC`
     Numeric(PrecisionSpecification),
+
+    /// `FLOAT`
     Float(usize),
+    
+    /// `DATE`
     Date,
+
+    /// `TIME`
     Time,
+
+    /// `TIMESTAMP`
     Timestamp,
+
+    /// `INTERVAL`
     Interval(IntervalType),
+
+    /// `ST_GEOMETRY`
     Geometry(usize),
+
+    /// `ST_GEOGRAPHY`
     Geography(usize),
 }
 
@@ -463,12 +700,19 @@ impl DescribeStatement {
 /// Assignment used as part of an Update statement. One or more columns are updated with
 /// the provided expression value.
 pub struct Assignment {
+    /// the columns to populate
     pub columns: Vec<symbols::Name>,
+
+    /// an expression that needs to return as many columns as there a column identifiers in `columns`
     pub expr: Box<Expression>,
 }
 
+/// Selection mode options
 pub enum SelectMode {
+    /// Return all rows, including duplicate values
     All,
+
+    /// Return only distinct rows, that is, apply proper set semantics
     Distinct,
 }
 
