@@ -25,19 +25,19 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-#[macro_use] 
+#[macro_use]
 extern crate lalrpop_util;
 
 extern crate csv;
 extern crate users;
 
 pub mod ast;
-pub mod schema;
-pub mod types;
 pub mod eval;
-pub mod storage;
+pub mod schema;
 pub mod session;
+pub mod storage;
 pub mod symbols;
+pub mod types;
 
 /// A simple error type for this library
 pub struct Error {

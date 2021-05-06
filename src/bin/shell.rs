@@ -23,8 +23,8 @@
 extern crate tabwriter;
 extern crate vervolg;
 
-use std::io::prelude::*;
 use std::io;
+use std::io::prelude::*;
 
 use tabwriter::TabWriter;
 

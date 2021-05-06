@@ -868,9 +868,15 @@ impl SetContext {
                 // look for the table name within the default schema
                 match self.namespaces.0.get(&self.default_namespace) {
                     None => panic!("Default namespace not present in database"),
-                    Some(ref namespace) => namespace.0.get(&qualified_name[0]).ok_or(Error::from(
-                        format!("Table name {} not found in schema", qualified_name[0]),
-                    )),
+                    Some(ref namespace) => {
+                        namespace
+                            .0
+                            .get(&qualified_name[0])
+                            .ok_or(Error::from(format!(
+                                "Table name {} not found in schema",
+                                qualified_name[0]
+                            )))
+                    }
                 }
             }
             2usize => {
@@ -891,9 +897,15 @@ impl SetContext {
                         "Namespace {} not present in database",
                         qualified_name[0]
                     ))),
-                    Some(ref namespace) => namespace.0.get(&qualified_name[1]).ok_or(Error::from(
-                        format!("Table name {} not found in schema", qualified_name[1]),
-                    )),
+                    Some(ref namespace) => {
+                        namespace
+                            .0
+                            .get(&qualified_name[1])
+                            .ok_or(Error::from(format!(
+                                "Table name {} not found in schema",
+                                qualified_name[1]
+                            )))
+                    }
                 }
             }
             _ => Err(Error::from(
@@ -1123,69 +1135,76 @@ impl ResultColumns {
         let mut generated_columns = collections::BTreeMap::new();
 
         match self {
-            &ResultColumns::All => for attribute in attributes {
-                let result_name = generate_column_name(&attribute.name, &mut generated_columns);
-                result_attributes.push(Attribute {
-                    name: result_name,
-                    typ: attribute.typ.clone(),
-                    is_null: attribute.is_null,
-                });
-            },
-            &ResultColumns::List(ref column_list) => for column in column_list {
-                match &**column {
-                    &ResultColumn::AllFrom(ref name) => match context.symbols.get(name) {
-                        None => {
-                            return Err(Error::from(format!("Undefined collection named {}", name)))
-                        }
-                        Some(&ScalarContextSymbol::Relation(ref fields)) => {
-                            for (ref name, ref scalar) in fields {
-                                match *scalar {
-                                    &ScalarType::Scalar {
-                                        ref typ,
-                                        ref is_null,
-                                    } => {
-                                        let result_name =
-                                            generate_column_name(name, &mut generated_columns);
-                                        result_attributes.push(Attribute {
-                                            name: result_name,
-                                            typ: typ.clone(),
-                                            is_null: *is_null,
-                                        });
+            &ResultColumns::All => {
+                for attribute in attributes {
+                    let result_name = generate_column_name(&attribute.name, &mut generated_columns);
+                    result_attributes.push(Attribute {
+                        name: result_name,
+                        typ: attribute.typ.clone(),
+                        is_null: attribute.is_null,
+                    });
+                }
+            }
+            &ResultColumns::List(ref column_list) => {
+                for column in column_list {
+                    match &**column {
+                        &ResultColumn::AllFrom(ref name) => match context.symbols.get(name) {
+                            None => {
+                                return Err(Error::from(format!(
+                                    "Undefined collection named {}",
+                                    name
+                                )))
+                            }
+                            Some(&ScalarContextSymbol::Relation(ref fields)) => {
+                                for (ref name, ref scalar) in fields {
+                                    match *scalar {
+                                        &ScalarType::Scalar {
+                                            ref typ,
+                                            ref is_null,
+                                        } => {
+                                            let result_name =
+                                                generate_column_name(name, &mut generated_columns);
+                                            result_attributes.push(Attribute {
+                                                name: result_name,
+                                                typ: typ.clone(),
+                                                is_null: *is_null,
+                                            });
+                                        }
+                                        _ => panic!(
+                                            "Attributes of a schema object should be scalar values"
+                                        ),
                                     }
-                                    _ => panic!(
-                                        "Attributes of a schema object should be scalar values"
-                                    ),
                                 }
                             }
-                        }
-                        Some(_) => {
-                            return Err(Error::from(format!(
-                                "Symbol {} needs to be a range variable",
-                                name
-                            )))
-                        }
-                    },
-                    &ResultColumn::Expr {
-                        ref expr,
-                        rename: ref alias,
-                    } => match expr.infer_type(&context)? {
-                        ScalarType::Tuple(_) => {
-                            return Err(Error::from("Result column needs to be a scalar type"))
-                        }
-                        ScalarType::Scalar { typ, is_null } => {
-                            let name = match alias {
-                                &None => symbols::Name::from("col"),
-                                &Some(ref name) => name.clone(),
-                            };
-                            result_attributes.push(Attribute {
-                                name: generate_column_name(&name, &mut generated_columns),
-                                typ,
-                                is_null,
-                            });
-                        }
-                    },
+                            Some(_) => {
+                                return Err(Error::from(format!(
+                                    "Symbol {} needs to be a range variable",
+                                    name
+                                )))
+                            }
+                        },
+                        &ResultColumn::Expr {
+                            ref expr,
+                            rename: ref alias,
+                        } => match expr.infer_type(&context)? {
+                            ScalarType::Tuple(_) => {
+                                return Err(Error::from("Result column needs to be a scalar type"))
+                            }
+                            ScalarType::Scalar { typ, is_null } => {
+                                let name = match alias {
+                                    &None => symbols::Name::from("col"),
+                                    &Some(ref name) => name.clone(),
+                                };
+                                result_attributes.push(Attribute {
+                                    name: generate_column_name(&name, &mut generated_columns),
+                                    typ,
+                                    is_null,
+                                });
+                            }
+                        },
+                    }
                 }
-            },
+            }
         }
 
         Ok(RowType {
@@ -1269,13 +1288,11 @@ impl SetSpecification {
 
                 match value_type {
                     ScalarType::Scalar { typ, is_null } => Ok(RowType {
-                        attributes: vec![
-                            Attribute {
-                                name: symbols::Name::from("_col0"),
-                                typ,
-                                is_null,
-                            },
-                        ],
+                        attributes: vec![Attribute {
+                            name: symbols::Name::from("_col0"),
+                            typ,
+                            is_null,
+                        }],
                         primary_key: Vec::new(),
                         order_by: Vec::new(),
                     }),
@@ -1301,6 +1318,17 @@ impl SqlStatement {
             }
             &SqlStatement::Attach(ref attach) => attach.validate_type(context),
             &SqlStatement::Describe(ref describe) => describe.validate_type(context),
+
+            &SqlStatement::AlterDomain(_) => unimplemented!("validate_type for ALTER DOMAIN"),
+            &SqlStatement::CreateDomain(_) => unimplemented!("validate_type for CREATE DOMAIN"),
+            &SqlStatement::DropDomain(_) => unimplemented!("validate_type for DROP DOMAIN"),
+            &SqlStatement::AlterTable(_) => unimplemented!("validate_type for ALTER TABLE"),
+            &SqlStatement::CreateTable(_) => unimplemented!("validate_type for CREATE TABLE"),
+            &SqlStatement::DropTable(_) => unimplemented!("validate_type for DROP TABLE"),
+            &SqlStatement::CreateSchema(_) => unimplemented!("validate_type for CREATE SCHEMA"),
+            &SqlStatement::DropSchema(_) => unimplemented!("validate_type for DROP SCHEMA"),
+            &SqlStatement::CreateView(_) => unimplemented!("validate_type for CREATE VIEW"),
+            &SqlStatement::DropView(_) => unimplemented!("validate_type for DROP VIEW"),
         }
     }
 }
@@ -1328,16 +1356,6 @@ impl Statement {
             &Statement::Insert(ref insert) => insert.validate_type(context),
             &Statement::Update(ref update) => update.validate_type(context),
             &Statement::Delete(ref delete) => delete.validate_type(context),
-            &Statement::AlterDomain(_) => unimplemented!("validate_type for ALTER DOMAIN"),
-            &Statement::CreateDomain(_) => unimplemented!("validate_type for CREATE DOMAIN"),
-            &Statement::DropDomain(_) => unimplemented!("validate_type for DROP DOMAIN"),
-            &Statement::AlterTable(_) => unimplemented!("validate_type for ALTER TABLE"),
-            &Statement::CreateTable(_) => unimplemented!("validate_type for CREATE TABLE"),
-            &Statement::DropTable(_) => unimplemented!("validate_type for DROP TABLE"),
-            &Statement::CreateSchema(_) => unimplemented!("validate_type for CREATE SCHEMA"),
-            &Statement::DropSchema(_) => unimplemented!("validate_type for DROP SCHEMA"),
-            &Statement::CreateView(_) => unimplemented!("validate_type for CREATE VIEW"),
-            &Statement::DropView(_) => unimplemented!("validate_type for DROP VIEW"),
         }
     }
 }
@@ -1471,33 +1489,35 @@ impl UpdateStatement {
 
         for assignment in &self.assignments {
             match assignment.expr.infer_type(&scalar_context)? {
-                ScalarType::Scalar { typ, is_null } => for column in &assignment.columns {
-                    if assigned_columns.contains(column) {
-                        return Err(Error::from(format!(
-                            "Duplicate assignment of column '{}'",
-                            column
-                        )));
-                    }
-
-                    match row_type_map.get(column) {
-                        None => {
+                ScalarType::Scalar { typ, is_null } => {
+                    for column in &assignment.columns {
+                        if assigned_columns.contains(column) {
                             return Err(Error::from(format!(
-                                "Assignment to undefined column '{}'",
+                                "Duplicate assignment of column '{}'",
                                 column
-                            )))
+                            )));
                         }
-                        Some(&(ref column_type, ref colummn_is_null)) => {
-                            if *column_type != typ || (is_null && !colummn_is_null) {
+
+                        match row_type_map.get(column) {
+                            None => {
                                 return Err(Error::from(format!(
-                                    "Assignment incompatible value to column '{}'",
+                                    "Assignment to undefined column '{}'",
                                     column
-                                )));
+                                )))
+                            }
+                            Some(&(ref column_type, ref colummn_is_null)) => {
+                                if *column_type != typ || (is_null && !colummn_is_null) {
+                                    return Err(Error::from(format!(
+                                        "Assignment incompatible value to column '{}'",
+                                        column
+                                    )));
+                                }
                             }
                         }
-                    }
 
-                    assigned_columns.insert(column);
-                },
+                        assigned_columns.insert(column);
+                    }
+                }
                 _ => return Err(Error::from("Assigned value needs to be of scalar type")),
             }
         }

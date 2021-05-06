@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-
 use ast;
 use schema;
 use session;
@@ -413,6 +412,16 @@ impl<'a> Evaluator<'a> {
             }
             ast::SqlStatement::Attach(info) => self.attach(info),
             ast::SqlStatement::Describe(info) => self.describe(info),
+            ast::SqlStatement::AlterDomain(_) => unimplemented!("interpret for ALTER DOMAIN"),
+            ast::SqlStatement::CreateDomain(_) => unimplemented!("interpret for CREATE DOMAIN"),
+            ast::SqlStatement::DropDomain(_) => unimplemented!("interpret for DROP DOMAIN"),
+            ast::SqlStatement::AlterTable(_) => unimplemented!("interpret for ALTER TABLE"),
+            ast::SqlStatement::CreateTable(_) => unimplemented!("interpret for CREATE TABLE"),
+            ast::SqlStatement::DropTable(_) => unimplemented!("interpret for DROP TABLE"),
+            ast::SqlStatement::CreateSchema(_) => unimplemented!("interpret for CREATE SCHEMA"),
+            ast::SqlStatement::DropSchema(_) => unimplemented!("interpret for DROP SCHEMA"),
+            ast::SqlStatement::CreateView(_) => unimplemented!("interpret for CREATE VIEW"),
+            ast::SqlStatement::DropView(_) => unimplemented!("interpret for DROP VIEW"),
         }
     }
 
@@ -476,7 +485,10 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn compile_table_expression(&self, expr: &ast::TableExpression) -> Result<Box<dyn RowSet>, Error> {
+    fn compile_table_expression(
+        &self,
+        expr: &ast::TableExpression,
+    ) -> Result<Box<dyn RowSet>, Error> {
         match expr {
             &ast::TableExpression::Named {
                 ref name,
@@ -495,7 +507,7 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<RowSet>, Error> {
+    fn attach(&mut self, info: ast::AttachStatement) -> Result<Box<dyn RowSet>, Error> {
         self.session.database.attach_file(
             info.schema_name().unwrap_or(&self.session.default_schema),
             info.table_name(),
@@ -504,7 +516,7 @@ impl<'a> Evaluator<'a> {
         Ok(Box::new(EmptyRowSet::new()))
     }
 
-    fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<RowSet>, Error> {
+    fn describe(&mut self, info: ast::DescribeStatement) -> Result<Box<dyn RowSet>, Error> {
         let rowset = self.session.database.describe(
             info.schema_name().unwrap_or(&self.session.default_schema),
             info.table_name(),

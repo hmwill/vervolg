@@ -20,16 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use csv;
 
-use super::Error;
-use super::types;
 use super::symbols;
+use super::types;
+use super::Error;
 
 /// the logical database, which is a collection of schemata
 #[derive(Serialize, Deserialize, Debug)]
@@ -52,7 +52,8 @@ impl Database {
             )));
         }
 
-        let old_value = self.schemata
+        let old_value = self
+            .schemata
             .insert(schema_name.clone(), Schema::new(schema_name.clone()));
         assert!(old_value.is_none());
         Ok(())
@@ -83,7 +84,8 @@ impl Database {
         path: &str,
     ) -> Result<(), Error> {
         // validate that the schema name is valid
-        let ref mut schema = self.schemata
+        let ref mut schema = self
+            .schemata
             .get_mut(schema_name)
             .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
 
@@ -109,7 +111,8 @@ impl Database {
         object_name: &symbols::Name,
     ) -> Result<RowSet, Error> {
         // validate that the schema name is valid
-        let schema = self.schemata
+        let schema = self
+            .schemata
             .get(schema_name)
             .ok_or(Error::from(format!("Schema '{}' not found", schema_name)))?;
 
