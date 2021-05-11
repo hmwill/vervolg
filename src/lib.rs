@@ -42,7 +42,7 @@ pub mod types;
 /// A simple error type for this library
 pub struct Error {
     message: String,
-    nested: Option<Box<std::error::Error>>,
+    nested: Option<Box<dyn std::error::Error>>,
 }
 
 impl Error {
@@ -71,7 +71,7 @@ impl std::error::Error for Error {
         &self.message
     }
 
-    fn cause(&self) -> Option<&std::error::Error> {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
         use std::ops::Deref;
 
         self.nested.as_ref().map(|e| e.deref())

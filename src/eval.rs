@@ -456,11 +456,11 @@ impl<'a> Evaluator<'a> {
 
     fn compile_set_expression(&self, expr: &ast::SetExpression) -> Result<Box<dyn RowSet>, Error> {
         match expr {
-            &ast::SetExpression::Values(ref values) => unimplemented!(),
+            &ast::SetExpression::Values(ref _values) => unimplemented!(),
             &ast::SetExpression::Op {
-                ref op,
-                ref left,
-                ref right,
+                op: ref _op,
+                left: ref _left,
+                right: ref _right,
             } => unimplemented!(),
             &ast::SetExpression::Query {
                 ref mode,
@@ -491,18 +491,18 @@ impl<'a> Evaluator<'a> {
     ) -> Result<Box<dyn RowSet>, Error> {
         match expr {
             &ast::TableExpression::Named {
-                ref name,
-                ref alias,
+                name: ref _name,
+                alias: ref _alias,
             } => unimplemented!(),
             &ast::TableExpression::Select {
-                ref select,
-                ref alias,
+                select: ref _select,
+                alias: ref _alias,
             } => unimplemented!(),
             &ast::TableExpression::Join {
-                ref left,
-                ref right,
-                ref op,
-                ref constraint,
+                left: ref _left,
+                right: ref _right,
+                op: ref _op,
+                constraint: ref _constraint,
             } => unimplemented!(),
         }
     }

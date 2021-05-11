@@ -21,8 +21,6 @@
 // SOFTWARE.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io;
 use std::path::PathBuf;
 
 use csv;
@@ -61,18 +59,18 @@ impl Database {
 
     pub fn create_table(
         &mut self,
-        schema_name: &symbols::Name,
-        table_name: &symbols::Name,
-        columns: &[Column],
+        _schema_name: &symbols::Name,
+        _table_name: &symbols::Name,
+        _columns: &[Column],
     ) -> Result<(), Error> {
         unimplemented!()
     }
 
     pub fn create_view(
         &mut self,
-        schema_name: &symbols::Name,
-        table_name: &symbols::Name,
-        query: &str,
+        _schema_name: &symbols::Name,
+        _table_name: &symbols::Name,
+        _query: &str,
     ) -> Result<(), Error> {
         unimplemented!()
     }
